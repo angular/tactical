@@ -1,0 +1,26 @@
+{
+  "name": "tactical",
+  "version": "0.0.1",
+  "description": "An Angular data access library supporting offline, realtime, etc.",
+  "scripts": {
+    "test": "..."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angular/tactical.git"
+  },
+  "license": "Apache 2",
+  "bugs": {
+    "url": "https://github.com/angular/tactical/issues"
+  },
+  "homepage": "https://github.com/angular/tactical#readme",
+  "devDependencies": {
+    "angular": "angular/angular",
+    "gulp": "^3.8.11",
+    "karma": "^0.12.32",
+    "typescript": "alexeagle/TypeScript#error_is_class"
+  },
+  "dependencies": {
+    "rx": "^2.5.2"
+  }
+}
