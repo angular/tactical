@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/angular/tactical.git"
   },
-  "license": "Apache 2",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/angular/tactical/issues"
   },
@@ -17,7 +17,10 @@
   "devDependencies": {
     "angular": "angular/angular",
     "gulp": "^3.8.11",
-    "karma": "^0.12.32",
+    "gulp-typescript": "^2.7.6",
+    "mocha": "^2.2.5",
+    "protobufjs": "^3.8.0",
+    "tsd": "^0.6.0",
     "typescript": "alexeagle/TypeScript#error_is_class"
   },
   "dependencies": {

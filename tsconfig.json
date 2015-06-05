@@ -1,13 +1,12 @@
 {
+    "version": "1.5.0",
     "compilerOptions": {
+        "target": "es5",
         "module": "commonjs",
         "noImplicitAny": false,
         "removeComments": true,
         "preserveConstEnums": true,
         "sourceMap": true,
-        "outDir": "./dist/modules/",
-        "rootDir": "./"
-    },
-    "files": [
-    ]
+        "outDir": "./dist/"
+    }
 }
