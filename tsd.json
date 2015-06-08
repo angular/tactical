@@ -19,6 +19,9 @@
     },
     "rx/rx-lite.d.ts": {
       "commit": "484544d14d400190b20f270341c97b16adc0f1ef"
+    },
+    "chai/chai.d.ts": {
+      "commit": "8b7cc13f6dbabd0a49de7ccba75c342160e600ad"
     }
   }
 }

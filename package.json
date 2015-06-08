@@ -24,6 +24,7 @@
     "typescript": "alexeagle/TypeScript#error_is_class"
   },
   "dependencies": {
+    "chai": "^3.0.0",
     "rx": "^2.5.2"
   }
 }
