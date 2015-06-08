@@ -17,6 +17,7 @@
   "devDependencies": {
     "angular": "angular/angular",
     "gulp": "^3.8.11",
+    "gulp-mocha": "^2.1.1",
     "gulp-typescript": "^2.7.6",
     "mocha": "^2.2.5",
     "protobufjs": "^3.8.0",
