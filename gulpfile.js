@@ -109,13 +109,13 @@ gulp.task('build', function(done) {
 /**
  * Run tests with Mocha and report the results.
  */
-gulp.task('test', function() {
+gulp.task('test', ['build'], function() {
   return gulp.src('./dist/**/test/*.js').pipe(gulpMocha());
 });
 
 /**
  * Run tests with Mocha and report the results in a more fun way.
  */
-gulp.task('test.nyan', function() {
+gulp.task('test.nyan', ['build'], function() {
   return gulp.src('./dist/**/test/*.js').pipe(gulpMocha({'reporter': 'nyan'}));
 });
