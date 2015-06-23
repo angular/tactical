@@ -16,6 +16,7 @@
   "homepage": "https://github.com/angular/tactical#readme",
   "devDependencies": {
     "angular": "angular/angular",
+    "chai": "^3.0.0",
     "gulp": "^3.8.11",
     "gulp-clang-format": "^1.0.19",
     "gulp-mocha": "^2.1.2",
