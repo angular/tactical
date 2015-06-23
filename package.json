@@ -17,9 +17,11 @@
   "devDependencies": {
     "angular": "angular/angular",
     "gulp": "^3.8.11",
+    "gulp-clang-format": "^1.0.19",
+    "gulp-mocha": "^2.1.2",
     "gulp-typescript": "^2.7.6",
     "mocha": "^2.2.5",
-    "protobufjs": "^3.8.0",
+    "run-sequence": "^1.1.1",
     "tsd": "^0.6.0",
     "typescript": "alexeagle/TypeScript#error_is_class"
   },
