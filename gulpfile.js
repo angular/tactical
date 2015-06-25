@@ -119,3 +119,10 @@ gulp.task('test', ['build'], function() {
 gulp.task('test.nyan', ['build'], function() {
   return gulp.src('./dist/**/test/*.js').pipe(gulpMocha({'reporter': 'nyan'}));
 });
+
+/**
+ * Runs pre-submission checks to ensure the quality of future pull requests.
+ */
+gulp.task('pre-submit', function(done) {
+  return runSequence('check-format', 'test', sequenceComplete(done));
+});
