@@ -81,11 +81,29 @@ export class RecordKey {
 }
 
 /**
+ * A storage backend.
+ */
+export interface Store {
+  /**
+   * Reads a Record from the store.
+   *
+   * If a version is supplied, returns the object matching that version. Otherwise,
+   * returns the most recently committed version of that object.
+   */
+  fetch(key: Object, version?: string): Observable<Record>;
+
+  /**
+   * Stores a Record into the store as the most recent version.
+   */
+  commit(key: Object, value: Object, version: string): Observable<boolean>;
+}
+
+/**
  * An instantiable class of the Tactical Store. Requires an abstraction API over a persistent local
  * cache, and also accepts a store extension to modify the storage location, in that cache, for the
  * instance of the Tactical Store to use.
  */
-export class TacticalStore {
+export class TacticalStore implements Store {
   private static _versionStore: string = "_versions_tactical_";
   private static _recordStore: string = "_records_tactical_";
 
@@ -155,5 +173,16 @@ export class TacticalStore {
             }
           }, (err: any) => { observer.onError(err); });
     });
+  }
+}
+
+/**
+ * An implementation of a Store that does nothing.
+ */
+export class NoopStore implements Store {
+  fetch(key: Object, version?: string): Observable<Record> { return Observable.empty<Record>(); }
+
+  commit(key: Object, value: Object, version: string): Observable<boolean> {
+    return Observable.from<boolean>([true]);
   }
 }
