@@ -5,6 +5,8 @@ import {Observable, Subject} from 'rx';
 import {Backend, VersionedObject} from './backend';
 import {serializeValue} from './json';
 import {Link} from './link';
+import {Store} from './tactical_store';
+import {Record} from './record';
 
 /**
  * Manages subscriptions to data, and acts as an interface for the application.
@@ -18,12 +20,18 @@ export class TacticalDataManager implements DataManager {
   private _backend: Backend;
 
   /**
+   * Local store.
+   */
+  private _store: Store;
+
+  /**
    * Map of active keys to observables.
    */
   private _active: {[key: string]: Link<Object>[]} = {};
 
-  constructor(backend: Backend) {
+  constructor(backend: Backend, store: Store) {
     this._backend = backend;
+    this._store = store;
     backend.data().subscribe((data: VersionedObject) => { this._backendData(data); });
   }
 
@@ -32,6 +40,7 @@ export class TacticalDataManager implements DataManager {
    */
   private _backendData(data: VersionedObject): void {
     var keyStr = serializeValue(data.key);
+    this._store.commit(data.key, data.data, data.version).subscribe();
     if (this._active.hasOwnProperty(keyStr)) {
       this._active[keyStr].forEach((link: Link<Object>) => { link.send(data.data); });
     }
@@ -59,6 +68,10 @@ export class TacticalDataManager implements DataManager {
    * Make a request from the local store for the given key.
    */
   private _requestFromStore(key: Object, link: Link<Object>): void {
-    // TODO(Alex): Actually talk to Tactical Store once it's implemented.
+    this._store.fetch(key).subscribe((data: Record) => {
+      if (data != null) {
+        link.send(data.value);
+      }
+    });
   }
 }
