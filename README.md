@@ -1,3 +1,5 @@
+[![Build Status](https://drone.io/github.com/angular/tactical/status.png)](https://drone.io/github.com/angular/tactical/latest)
+
 # Tactical
 
 Users are doing more with web applications than ever before. From laptops to tablets to mobile devices, from coffee shops to conferences to airplanes and road trips, apps are being used in a variety of situations and scenarios. Across all of this usage is a common problem: connectivity can frequently be unreliable or unavailable entirely.
