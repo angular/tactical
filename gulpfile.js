@@ -2,6 +2,7 @@
 var cp = require('child_process');
 var format = require('gulp-clang-format');
 var gulp = require('gulp');
+var gulpClean = require('gulp-clean');
 var gulpMocha = require('gulp-mocha');
 var gulpTsc = require('gulp-typescript');
 var runSequence = require('run-sequence');
@@ -13,6 +14,11 @@ var runSequence = require('run-sequence');
 // Sets typescript compilation options using tsconfig.json.
 var tsProject = gulpTsc.createProject('./tsconfig.json', {
     typescript: require('typescript')
+  });
+  
+var strictProject = gulpTsc.createProject('./tsconfig.json', {
+    typescript: require('typescript'),
+    noEmitOnError: true
   });
 
 
@@ -93,12 +99,25 @@ gulp.task('check-format', function() {
 // ==========
 // compile
 
+gulp.task('!clean', function() {
+  return gulp.src('./dist', {read: false}).pipe(gulpClean());
+});
+
 /**
  * Transcompile all TypeScript code to JavaScript.
  */
-gulp.task('build', function(done) {
+gulp.task('build', ['!clean'], function() {
   var tsResult = gulp.src('./modules/**/*.ts')
       .pipe(gulpTsc(tsProject));
+  return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
+});
+
+/**
+ * Transcompile all TypeScript code to JavaScript, only if the typescript compiler emits no errors.
+ */
+gulp.task('build.strict', ['!clean'], function() {
+  var tsResult = gulp.src('./modules/**/*.ts')
+      .pipe(gulpTsc(strictProject));
   return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
 });
 
@@ -121,8 +140,15 @@ gulp.task('test.nyan', ['build'], function() {
 });
 
 /**
+ * Run tests with Mocha and report the results in a more fun way.
+ */
+gulp.task('test.strict', ['build.strict'], function() {
+  return gulp.src('./dist/**/test/*.js').pipe(gulpMocha());
+});
+
+/**
  * Runs pre-submission checks to ensure the quality of future pull requests.
  */
 gulp.task('pre-submit', function(done) {
-  return runSequence('check-format', 'test', sequenceComplete(done));
+  return runSequence('check-format', 'test.strict', sequenceComplete(done));
 });
