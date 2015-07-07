@@ -5,7 +5,7 @@ import {FakeBackend, VersionedObject} from '../src/backend';
 import {TacticalDataManager} from '../src/data_manager';
 import {NoopStore, TacticalStore} from '../src/tactical_store';
 import {Record} from '../src/record';
-import {InMemoryIdb} from '../src/idb';
+import {InMemoryIdbFactory} from '../src/idb';
 import {expect} from 'chai';
 
 function _versioned(version: string, key: Object, data: Object): VersionedObject {
@@ -37,7 +37,7 @@ describe('DataManager', () => {
   });
   it('stores new objects in TacticalStore', (done) => {
     var be = new FakeBackend();
-    var ts = new TacticalStore(new InMemoryIdb());
+    var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
     be.load(_versioned('v1', {key: true}, {foo: 'hello'}));
     ts.fetch({key: true})
@@ -49,7 +49,7 @@ describe('DataManager', () => {
   });
   it('serves from TacticalStore when available', (done) => {
     var be = new FakeBackend();
-    var ts = new TacticalStore(new InMemoryIdb());
+    var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
     ts.commit({key: true}, {foo: 'goodbye'}, 'v1')
         .subscribe(() => {
@@ -62,7 +62,7 @@ describe('DataManager', () => {
   });
   it('serves from TacticalStore and then the backend', (done) => {
     var be = new FakeBackend();
-    var ts = new TacticalStore(new InMemoryIdb());
+    var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
     be.load(_versioned('v1', {key: true}, {foo: 'goodbye'}), false);
     ts.commit({key: true}, {foo: 'hello'}, 'v1')

@@ -19,7 +19,7 @@
 
 import {Observable} from 'rx';
 
-import {Idb} from './idb';
+import {Idb, IdbFactory} from './idb';
 import {serializeValue} from './json';
 import {Record} from './record';
 ;
@@ -107,7 +107,13 @@ export class TacticalStore implements Store {
   private static _versionStore: string = "_versions_tactical_";
   private static _recordStore: string = "_records_tactical_";
 
-  constructor(private _idbRef: Idb, public store = '') {}
+  private _idb: Idb;
+
+  constructor(idbFactory: IdbFactory, public store = '') {
+    this._idb = idbFactory(
+        'tactical_db',
+        [this.store + TacticalStore._versionStore, this.store + TacticalStore._recordStore]);
+  }
 
   /**
    * Reads a Record from persistent local cache. Emits the Record that
@@ -121,7 +127,7 @@ export class TacticalStore implements Store {
     return Observable.create<Record>((observer: Rx.Observer<Record>) => {
       if (version) {
         recordKey = new RecordKey(version, chainKey);
-        this._idbRef.get(this.store + TacticalStore._recordStore, recordKey.serial)
+        this._idb.get(this.store + TacticalStore._recordStore, recordKey.serial)
             .subscribe((value: Object) => {
               if (value) {
                 observer.onNext({version: version, value: value});
@@ -131,11 +137,11 @@ export class TacticalStore implements Store {
             }, (err: any) => { observer.onError(err); });
       } else {
         // fetch the most recent Record in the Chain
-        this._idbRef.get(this.store + TacticalStore._versionStore, chainKey.serial)
+        this._idb.get(this.store + TacticalStore._versionStore, chainKey.serial)
             .subscribe((ver: Version) => {
               if (ver && ver.version) {
                 recordKey = new RecordKey(ver.version, chainKey);
-                this._idbRef.get(this.store + TacticalStore._recordStore, recordKey.serial)
+                this._idb.get(this.store + TacticalStore._recordStore, recordKey.serial)
                     .subscribe((value: Object) => {
                       if (value) {
                         observer.onNext({version: ver.version, value: value});
@@ -159,13 +165,12 @@ export class TacticalStore implements Store {
   commit(key: Object, value: Object, version: string): Observable<boolean> {
     return Observable.create<boolean>((observer: Rx.Observer<boolean>) => {
       var recordKey: RecordKey = new RecordKey(version, new ChainKey(key));
-      this._idbRef.put(this.store + TacticalStore._recordStore, recordKey.serial, value)
+      this._idb.put(this.store + TacticalStore._recordStore, recordKey.serial, value)
           .subscribe((ok: boolean) => {
             if (ok) {
               var ver: Version = {version: version};
               // update the most recent version in the Chain
-              this._idbRef.put(this.store + TacticalStore._versionStore, recordKey.chain.serial,
-                               ver)
+              this._idb.put(this.store + TacticalStore._versionStore, recordKey.chain.serial, ver)
                   .subscribe((ok: boolean) => { observer.onNext(ok); },
                              (err: any) => { observer.onError(err); });
             } else {

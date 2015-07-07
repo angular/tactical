@@ -119,18 +119,18 @@ gulp.task('build', ['!clean'], function() {
 });
 
 /**
- * Transcompile all TypeScript code to JavaScript for Karma testing.
- */
-gulp.task('build.karma', ['!clean'], function() {
-  var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(karmaProject));
-  return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
-});
-
-/**
  * Transcompile all TypeScript code to JavaScript, only if the typescript compiler emits no errors.
  */
 gulp.task('build.strict', ['!clean'], function() {
   var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(strictProject));
+  return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
+});
+
+/**
+ * Transcompile all TypeScript code to JavaScript for Karma testing.
+ */
+gulp.task('build.karma', ['!clean'], function() {
+  var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(karmaProject));
   return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
 });
 
@@ -142,21 +142,24 @@ gulp.task('build.strict', ['!clean'], function() {
  * Run tests with Mocha and report the results.
  */
 gulp.task('test', ['build'], function() {
-  return gulp.src('./dist/**/test/*.js').pipe(gulpMocha());
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+      .pipe(gulpMocha());
 });
 
 /**
  * Run tests with Mocha and report the results in a more fun way.
  */
 gulp.task('test.nyan', ['build'], function() {
-  return gulp.src('./dist/**/test/*.js').pipe(gulpMocha({'reporter': 'nyan'}));
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+      .pipe(gulpMocha({'reporter': 'nyan'}));
 });
 
 /**
  * Run tests with Mocha and report the results in a more fun way.
  */
 gulp.task('test.strict', ['build.strict'], function() {
-  return gulp.src('./dist/**/test/*.js').pipe(gulpMocha());
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+      .pipe(gulpMocha());
 });
 
 /*

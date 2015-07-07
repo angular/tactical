@@ -1,12 +1,13 @@
 /// <reference path="../../../typings/chai/chai.d.ts" />
 /// <reference path="../../../typings/mocha/mocha.d.ts" />
 
-import {Idb, InMemoryIdbFactory} from '../src/idb';
+import {Idb, IndexedDBFactory} from '../src/idb';
 import {expect} from 'chai';
 
-describe('InMemoryIdb', () => {
+describe('IndexedDB', function() {
+  var idb: Idb = IndexedDBFactory('test', ['x', 'y']);
+
   it('can recall previously stored objects', (done) => {
-    var idb: Idb = InMemoryIdbFactory('test', ['x']);
     idb.put('x', 'foo', {'bar': 'baz'})
         .flatMap((v1: boolean) => {
           expect(v1).to.be.true;
@@ -17,8 +18,8 @@ describe('InMemoryIdb', () => {
           done();
         });
   });
+
   it('can differentiate between different stores', (done) => {
-    var idb: Idb = InMemoryIdbFactory('test', ['x', 'y']);
     idb.put('x', 'foo', {'bar': 'baz'})
         .flatMap((v1: boolean) => {
           expect(v1).to.be.true;
@@ -37,12 +38,13 @@ describe('InMemoryIdb', () => {
           done();
         });
   });
+
   it('returns undefined for non-existent keys', (done) => {
-    var idb: Idb = InMemoryIdbFactory('test', ['x']);
     idb.get('x', 'not-there')
         .subscribe((v: Object) => {
           expect(v).to.be.undefined;
           done();
         });
   });
+
 });
