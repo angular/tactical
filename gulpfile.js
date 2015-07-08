@@ -5,6 +5,7 @@ var gulp = require('gulp');
 var gulpClean = require('gulp-clean');
 var gulpMocha = require('gulp-mocha');
 var gulpTsc = require('gulp-typescript');
+var karma = require('karma');
 var runSequence = require('run-sequence');
 
 
@@ -21,6 +22,12 @@ var strictProject = gulpTsc.createProject('./tsconfig.json', {
     noEmitOnError: true
   });
 
+// Sets other typescript compilation options for Karma testing using tsconfig.json.
+var karmaProject = gulpTsc.createProject('./tsconfig.json', {
+  typescript: require('typescript'),
+  module: 'amd'
+});
+  
 
 // ==========
 // helper functions
@@ -107,8 +114,15 @@ gulp.task('!clean', function() {
  * Transcompile all TypeScript code to JavaScript.
  */
 gulp.task('build', ['!clean'], function() {
-  var tsResult = gulp.src('./modules/**/*.ts')
-      .pipe(gulpTsc(tsProject));
+  var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(tsProject));
+  return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
+});
+
+/**
+ * Transcompile all TypeScript code to JavaScript for Karma testing.
+ */
+gulp.task('build.karma', ['!clean'], function() {
+  var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(karmaProject));
   return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
 });
 
@@ -116,8 +130,7 @@ gulp.task('build', ['!clean'], function() {
  * Transcompile all TypeScript code to JavaScript, only if the typescript compiler emits no errors.
  */
 gulp.task('build.strict', ['!clean'], function() {
-  var tsResult = gulp.src('./modules/**/*.ts')
-      .pipe(gulpTsc(strictProject));
+  var tsResult = gulp.src('./modules/**/*.ts').pipe(gulpTsc(strictProject));
   return tsResult.js.pipe(gulp.dest(tsProject.options.outDir));
 });
 
@@ -146,9 +159,16 @@ gulp.task('test.strict', ['build.strict'], function() {
   return gulp.src('./dist/**/test/*.js').pipe(gulpMocha());
 });
 
+/*
+ * Run tests with Mocha and Karma, as a test-runner
+ */
+gulp.task('test.karma', ['build.karma'], function(done) {
+  karma.server.start({configFile: __dirname + '/karma.conf.js'}, done);
+});
+
 /**
  * Runs pre-submission checks to ensure the quality of future pull requests.
  */
 gulp.task('pre-submit', function(done) {
-  return runSequence('check-format', 'test.strict', sequenceComplete(done));
+  return runSequence('check-format', 'test.strict', 'test.karma', sequenceComplete(done));
 });

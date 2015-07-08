@@ -22,7 +22,12 @@
     "gulp-clean": "^0.3.1",
     "gulp-mocha": "^2.1.2",
     "gulp-typescript": "^2.7.6",
+    "karma": "^0.12.37",
+    "karma-chrome-launcher": "^0.2.0",
+    "karma-mocha": "^0.2.0",
+    "karma-requirejs": "^0.2.2",
     "mocha": "^2.2.5",
+    "requirejs": "^2.1.18",
     "run-sequence": "^1.1.1",
     "tsd": "^0.6.0",
     "typescript": "alexeagle/TypeScript#error_is_class"
