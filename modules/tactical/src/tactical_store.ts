@@ -1,5 +1,4 @@
-/// <reference path="../../../typings/rx/rx.d.ts" />
-/// <reference path="../../../typings/rx/rx-lite.d.ts" />
+/// <reference path="../../../typings/rx/rx.all.d.ts" />
 
 /**
  * Tactical Store is used to manage Tactical's working knowledge of the data model.
@@ -17,6 +16,7 @@
  * Chain. Each Record should be identifiable by a single combination of a key and a version and
  * each combination should identify a single Record.
  */
+
 import {Observable} from 'rx';
 
 import {Idb} from './idb';

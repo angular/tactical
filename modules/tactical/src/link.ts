@@ -1,5 +1,4 @@
-/// <reference path="../../../typings/rx/rx.d.ts" />
-/// <reference path="../../../typings/rx/rx-lite.d.ts" />
+/// <reference path="../../../typings/rx/rx.all.d.ts" />
 
 import {Observable, Observer} from 'rx';
 

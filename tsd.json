@@ -11,14 +11,59 @@
     "node/node.d.ts": {
       "commit": "d5f92f93bdb49f332fa662ff1d0cc8700f02e4dc"
     },
-    "rx/rx.d.ts": {
-      "commit": "484544d14d400190b20f270341c97b16adc0f1ef"
-    },
-    "rx/rx-lite.d.ts": {
-      "commit": "484544d14d400190b20f270341c97b16adc0f1ef"
-    },
     "chai/chai.d.ts": {
       "commit": "6387999eb899d0ba02d37dd8697647718caca230"
+    },
+    "rx/rx.all.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.backpressure-lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.backpressure.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.aggregates.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.binding.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.async.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.joinpatterns.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.experimental.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.async-lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.virtualtime.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.testing.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.time.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.binding-lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.time-lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.coincidence-lite.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
+    },
+    "rx/rx.coincidence.d.ts": {
+      "commit": "be03157bace6e6465e63f13073d7b68e8ea1303c"
     }
   }
 }
