@@ -67,6 +67,21 @@ describe("Tactical Store", () => {
         });
   });
 
+  it("should complete after servicing a commit request", (done) => {
+    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+
+    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
+        .subscribeOnCompleted(() => { done(); });
+  });
+
+  it("should complete after servicing a fetch request", (done) => {
+    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+
+    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
+        .flatMap((ok: boolean) => { return tacStore.fetch(chainKey.key); })
+        .subscribeOnCompleted(() => { done(); });
+  });
+
   it("should return the most recent Record when passed only a key", (done) => {
     var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
 

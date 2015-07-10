@@ -127,9 +127,11 @@ export class TacticalStore implements Store {
     if (version) {
       recordKey = new RecordKey(version, chainKey);
       return this._idb.get(TacticalStore._recordStore, recordKey.serial)
+          .take(1)
           .map((value: Object) => { return (value) ? {version: version, value: value} : null; });
     } else {
       return this._idb.get(TacticalStore._versionStore, chainKey.serial)
+          .take(1)
           .flatMap((ver: Version) => {
             if (ver && ver.version) {
               recordKey = new RecordKey(ver.version, chainKey);
@@ -152,6 +154,7 @@ export class TacticalStore implements Store {
   commit(key: Object, value: Object, version: string): Observable<boolean> {
     var recordKey: RecordKey = new RecordKey(version, new ChainKey(key));
     return this._idb.put(TacticalStore._recordStore, recordKey.serial, value)
+        .take(1)
         .flatMap((ok: boolean) => {
           if (!ok) {
             return Observable.just<boolean>(false);
@@ -166,7 +169,7 @@ export class TacticalStore implements Store {
  * An implementation of a Store that does nothing.
  */
 export class NoopStore implements Store {
-  fetch(key: Object, version?: string): Observable<Record> { return Observable.empty<Record>(); }
+  fetch(key: Object, version?: string): Observable<Record> { return Observable.just<Record>(null); }
 
   commit(key: Object, value: Object, version: string): Observable<boolean> {
     return Observable.just<boolean>(true);
