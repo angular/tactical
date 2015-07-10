@@ -13,6 +13,7 @@ function _versioned(version: string, key: Object, data: Object): VersionedObject
 }
 
 describe('DataManager', () => {
+
   it('returns an observable for a given key that later returns data for that key', (done) => {
     var be = new FakeBackend();
     be.load(_versioned('v1', {key: true}, {foo: 'hello'}));

@@ -1,9 +1,9 @@
 /// <reference path="../../../typings/rx/rx.all.d.ts" />
 
-import {Observable, Subject} from 'rx';
+import {Observable, Observer, Subject} from 'rx';
 import {Backend, VersionedObject} from './backend';
 import {serializeValue} from './json';
-import {Link} from './link';
+import {Stream} from './stream';
 import {Store} from './tactical_store';
 import {Record} from './record';
 
@@ -16,7 +16,7 @@ export class TacticalDataManager implements DataManager {
   /**
    * Map of active keys to observables.
    */
-  private _active: {[key: string]: Link<Object>[]} = {};
+  private _stream: {[key: string]: Stream<Object>} = {};
 
   /**
    * Create an instance of `TacticalDataManager`, backed by the given
@@ -32,8 +32,8 @@ export class TacticalDataManager implements DataManager {
   private _backendData(data: VersionedObject): void {
     var keyStr = serializeValue(data.key);
     this._store.commit(data.key, data.data, data.version).subscribe();
-    if (this._active.hasOwnProperty(keyStr)) {
-      this._active[keyStr].forEach((link: Link<Object>) => { link.send(data.data); });
+    if (this._stream.hasOwnProperty(keyStr)) {
+      this._stream[keyStr].send(data.data);
     }
   }
 
@@ -45,22 +45,26 @@ export class TacticalDataManager implements DataManager {
    */
   request(key: Object): Observable<Object> {
     var keyStr = serializeValue(key);
-    var link = new Link<Object>();
-    if (!this._active.hasOwnProperty(keyStr)) {
-      this._active[keyStr] = new Array<Link<Object>>();
+    if (!this._stream.hasOwnProperty(keyStr)) {
+      this._stream[keyStr] = new Stream<Object>(() => { delete this._stream[keyStr]; });
+      this._backend.request(key);
+      this._requestFromStore(key);
     }
-    this._backend.request(key);
-    this._requestFromStore(key, link);
-    this._active[keyStr].push(link);
-    return link.observable;
+    return this._stream[keyStr].observable;
   }
 
   /**
    * Make a request from the local store for the given key.
    */
-  private _requestFromStore(key: Object, link: Link<Object>): void {
+  private _requestFromStore(key: Object): void {
+    var keyStr = serializeValue(key);
     this._store.fetch(key)
         .filter(data => data != null)
-        .subscribe((data: Record) => { link.send(data.value); });
+        .map(data => data.value)
+        .subscribe(data => {
+          if (this._stream.hasOwnProperty(keyStr)) {
+            this._stream[keyStr].send(data);
+          }
+        });
   }
 }
