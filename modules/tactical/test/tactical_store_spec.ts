@@ -57,71 +57,33 @@ describe("Tactical Store", () => {
     var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
 
     tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.fetch(chainKey.key)
-                .subscribe((record: Record) => {
-                  expect(record.value['foo']).to.equal(fooValue['foo']);
-                  done();
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
-  });
-
-  it("should store multiple Records in a single Chain", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
-
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.commit(barKey.chain.key, barValue, barKey.version)
-                .subscribe((ok: boolean) => {
-                  if (ok) {
-                    tacStore.fetch(fooKey.chain.key, fooKey.version)
-                        .subscribe((record: Record) => {
-                          expect(record.value['foo']).to.equal(fooValue['foo']);
-
-                          tacStore.fetch(barKey.chain.key, barKey.version)
-                              .subscribe((otherRecord: Record) => {
-                                expect(otherRecord.value['foo']).to.equal(barValue['foo']);
-                                done();
-                              }, (err: any) => { done(err); });
-                        }, (err: any) => { done(err); });
-                  } else {
-                    throw expect(ok).to.be.true;
-                  }
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.fetch(chainKey.key);
+        })
+        .subscribe((record: Record) => {
+          expect(record.value['foo']).to.equal(fooValue['foo']);
+          done();
+        });
   });
 
   it("should return the most recent Record when passed only a key", (done) => {
     var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
 
     tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.commit(barKey.chain.key, barValue, barKey.version)
-                .subscribe((ok: boolean) => {
-                  if (ok) {
-                    tacStore.fetch(chainKey.key)
-                        .subscribe((record: Record) => {
-                          expect(record.version).to.equal(barKey.version);
-                          expect(record.value['foo']).to.equal(barValue['foo']);
-                          done();
-                        }, (err: any) => { done(err); });
-                  } else {
-                    throw expect(ok).to.be.true;
-                  }
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.commit(barKey.chain.key, barValue, barKey.version);
+        })
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.fetch(chainKey.key);
+        })
+        .subscribe((record: Record) => {
+          expect(record.version).to.equal(barKey.version);
+          expect(record.value['foo']).to.equal(barValue['foo']);
+          done();
+        });
   });
 
   it("should return null with a non-matching key", (done) => {
@@ -129,65 +91,52 @@ describe("Tactical Store", () => {
     var otherKey: ChainKey = new ChainKey({key: 'otherId'});
 
     tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.fetch(otherKey.key)
-                .subscribe((record: Record) => {
-                  expect(record).to.be.null;
-                  done();
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.fetch(otherKey.key);
+        })
+        .subscribe((record: Record) => {
+          expect(record).to.be.null;
+          done();
+        });
   });
 
   it("should return the correct Record when passed a key and a version", (done) => {
     var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
 
     tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.commit(barKey.chain.key, barValue, barKey.version)
-                .subscribe((ok: boolean) => {
-                  if (ok) {
-                    tacStore.fetch(fooKey.chain.key, fooKey.version)
-                        .subscribe((record: Record) => {
-                          expect(record.version).to.equal(fooKey.version);
-                          expect(record.value['foo']).to.equal(fooValue['foo']);
-
-                          tacStore.fetch(barKey.chain.key, barKey.version)
-                              .subscribe((otherRecord: Record) => {
-                                expect(otherRecord.version).to.equal(barKey.version);
-                                expect(otherRecord.value['foo']).to.equal(barValue['foo']);
-                                done();
-                              }, (err: any) => { done(err); });
-                        }, (err: any) => { done(err); });
-                  } else {
-                    throw expect(ok).to.be.true;
-                  }
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.commit(barKey.chain.key, barValue, barKey.version);
+        })
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.fetch(fooKey.chain.key, fooKey.version);
+        })
+        .flatMap((record: Record) => {
+          expect(record.version).to.equal(fooKey.version);
+          expect(record.value['foo']).to.equal(fooValue['foo']);
+          return tacStore.fetch(barKey.chain.key, barKey.version);
+        })
+        .subscribe((record: Record) => {
+          expect(record.version).to.equal(barKey.version);
+          expect(record.value['foo']).to.equal(barValue['foo']);
+          done();
+        });
   });
 
   it("should return null with a non-matching version", (done) => {
     var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
 
     tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .subscribe((ok: boolean) => {
-          if (ok) {
-            tacStore.fetch(fooKey.chain.key, barKey.version)
-                .subscribe((record: Record) => {
-                  expect(record).to.be.null;
-                  done();
-                }, (err: any) => { done(err); });
-          } else {
-            throw expect(ok).to.be.true;
-          }
-        }, (err: any) => { done(err); });
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return tacStore.fetch(fooKey.chain.key, barKey.version);
+        })
+        .subscribe((record: Record) => {
+          expect(record).to.be.null;
+          done();
+        });
   });
 
 });

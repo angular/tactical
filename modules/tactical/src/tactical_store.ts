@@ -109,10 +109,9 @@ export class TacticalStore implements Store {
 
   private _idb: Idb;
 
-  constructor(idbFactory: IdbFactory, public store = '') {
-    this._idb = idbFactory(
-        'tactical_db',
-        [this.store + TacticalStore._versionStore, this.store + TacticalStore._recordStore]);
+  constructor(idbFactory: IdbFactory, appDB: string = '') {
+    this._idb = idbFactory(appDB + '_tactical_db_',
+                           [TacticalStore._versionStore, TacticalStore._recordStore]);
   }
 
   /**
@@ -124,37 +123,25 @@ export class TacticalStore implements Store {
   fetch(key: Object, version?: string): Observable<Record> {
     var recordKey: RecordKey;
     var chainKey: ChainKey = new ChainKey(key);
-    return Observable.create<Record>((observer: Rx.Observer<Record>) => {
-      if (version) {
-        recordKey = new RecordKey(version, chainKey);
-        this._idb.get(this.store + TacticalStore._recordStore, recordKey.serial)
-            .subscribe((value: Object) => {
-              if (value) {
-                observer.onNext({version: version, value: value});
-              } else {
-                observer.onNext(null);
-              }
-            }, (err: any) => { observer.onError(err); });
-      } else {
-        // fetch the most recent Record in the Chain
-        this._idb.get(this.store + TacticalStore._versionStore, chainKey.serial)
-            .subscribe((ver: Version) => {
-              if (ver && ver.version) {
-                recordKey = new RecordKey(ver.version, chainKey);
-                this._idb.get(this.store + TacticalStore._recordStore, recordKey.serial)
-                    .subscribe((value: Object) => {
-                      if (value) {
-                        observer.onNext({version: ver.version, value: value});
-                      } else {
-                        observer.onNext(null);
-                      }
-                    }, (err: any) => { observer.onError(err); });
-              } else {
-                observer.onNext(null);
-              }
-            }, (err: any) => { observer.onError(err); });
-      }
-    });
+
+    if (version) {
+      recordKey = new RecordKey(version, chainKey);
+      return this._idb.get(TacticalStore._recordStore, recordKey.serial)
+          .map((value: Object) => { return (value) ? {version: version, value: value} : null; });
+    } else {
+      return this._idb.get(TacticalStore._versionStore, chainKey.serial)
+          .flatMap((ver: Version) => {
+            if (ver && ver.version) {
+              recordKey = new RecordKey(ver.version, chainKey);
+              return this._idb.get(TacticalStore._recordStore, recordKey.serial)
+                  .map((value: Object) => {
+                    return (value) ? {version: ver.version, value: value} : null;
+                  });
+            }
+
+            return Observable.just<Record>(null);
+          });
+    }
   }
 
   /**
@@ -163,21 +150,15 @@ export class TacticalStore implements Store {
    * TODO(ttowncompiled): overwrite unanchored Records.
    */
   commit(key: Object, value: Object, version: string): Observable<boolean> {
-    return Observable.create<boolean>((observer: Rx.Observer<boolean>) => {
-      var recordKey: RecordKey = new RecordKey(version, new ChainKey(key));
-      this._idb.put(this.store + TacticalStore._recordStore, recordKey.serial, value)
-          .subscribe((ok: boolean) => {
-            if (ok) {
-              var ver: Version = {version: version};
-              // update the most recent version in the Chain
-              this._idb.put(this.store + TacticalStore._versionStore, recordKey.chain.serial, ver)
-                  .subscribe((ok: boolean) => { observer.onNext(ok); },
-                             (err: any) => { observer.onError(err); });
-            } else {
-              observer.onNext(false);
-            }
-          }, (err: any) => { observer.onError(err); });
-    });
+    var recordKey: RecordKey = new RecordKey(version, new ChainKey(key));
+    return this._idb.put(TacticalStore._recordStore, recordKey.serial, value)
+        .flatMap((ok: boolean) => {
+          if (!ok) {
+            return Observable.just<boolean>(false);
+          }
+          var ver: Version = {version: version};
+          return this._idb.put(TacticalStore._versionStore, recordKey.chain.serial, ver);
+        });
   }
 }
 
@@ -188,6 +169,6 @@ export class NoopStore implements Store {
   fetch(key: Object, version?: string): Observable<Record> { return Observable.empty<Record>(); }
 
   commit(key: Object, value: Object, version: string): Observable<boolean> {
-    return Observable.from<boolean>([true]);
+    return Observable.just<boolean>(true);
   }
 }
