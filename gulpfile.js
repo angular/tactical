@@ -142,7 +142,7 @@ gulp.task('build.karma', ['!clean'], function() {
  * Run tests with Mocha and report the results.
  */
 gulp.task('test', ['build'], function() {
-  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/browser_test/*.js'])
       .pipe(gulpMocha());
 });
 
@@ -150,7 +150,7 @@ gulp.task('test', ['build'], function() {
  * Run tests with Mocha and report the results in a more fun way.
  */
 gulp.task('test.nyan', ['build'], function() {
-  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/browser_test/*.js'])
       .pipe(gulpMocha({'reporter': 'nyan'}));
 });
 
@@ -158,7 +158,7 @@ gulp.task('test.nyan', ['build'], function() {
  * Run tests with Mocha and report the results in a more fun way.
  */
 gulp.task('test.strict', ['build.strict'], function() {
-  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/test/indexeddb_spec.js'])
+  return gulp.src(['./dist/**/test/*.js', '!./dist/tactical/browser_test/*.js'])
       .pipe(gulpMocha());
 });
 
