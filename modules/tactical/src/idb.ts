@@ -76,14 +76,14 @@ export class InMemoryIdb implements Idb {
  */
 export var IndexedDBFactory: IdbFactory = (database: string, stores: string[]): IndexedDB => {
   // set buffer size to 1 so that the observable will only emit the most recent opened connection
-  var dbConnection: ReplaySubject<any> = new ReplaySubject<any>(1);
+  var dbConnection: ReplaySubject<IDBDatabase> = new ReplaySubject<IDBDatabase>(1);
   if (indexedDB) {
-    var DBOpenRequest = indexedDB.open(database);
-    DBOpenRequest.onupgradeneeded = (upgrade: any) => {
-      stores.forEach((store: string) => { upgrade.target.result.createObjectStore(store); });
+    var DBOpenRequest: IDBOpenDBRequest = indexedDB.open(database);
+    DBOpenRequest.onupgradeneeded = (upgrade: IDBVersionChangeEvent) => {
+      stores.forEach((store: string) => { DBOpenRequest.result.createObjectStore(store); });
     };
-    DBOpenRequest.onsuccess = (success: any) => { dbConnection.onNext(success.target.result); };
-    DBOpenRequest.onerror = (error: any) => { dbConnection.onError(error); };
+    DBOpenRequest.onsuccess = (success: Event) => { dbConnection.onNext(DBOpenRequest.result); };
+    DBOpenRequest.onerror = (error: ErrorEvent) => { dbConnection.onError(error.message); };
   } else {
     dbConnection.onError('indexedDB is undefined');
   }
@@ -95,27 +95,26 @@ export var IndexedDBFactory: IdbFactory = (database: string, stores: string[]): 
  * An implementation of the Idb interface over IndexedDB. Requires an open connection to indexeddb.
  *
  * TODO(ttowncompiled): Reopen the connection if it closes unexpectedly.
- * TODO(ttowncompiled): Definitions file for indexedDB would be nice.
  */
 export class IndexedDB implements Idb {
   static READ_WRITE: string = 'readwrite';
 
-  constructor(private _dbConnection: ReplaySubject<any>) {}
+  constructor(private _dbConnection: ReplaySubject<IDBDatabase>) {}
 
   /**
    * Retrieve the object associated with a key from the given store, or return
    * null if the key doesn't exist in that store.
    */
   get(store: string, key: string): Observable<Object> {
-    return this._dbConnection.flatMap((idbDatabase: any) => {
+    return this._dbConnection.flatMap((idbDatabase: IDBDatabase) => {
       return Observable.create<Object>((observer: Rx.Observer<Object>) => {
-        var transaction = idbDatabase.transaction([store]);
-        transaction.onerror = (error: any) => { observer.onNext(null); };
+        var transaction: IDBTransaction = idbDatabase.transaction([store]);
+        transaction.onerror = (error: ErrorEvent) => { observer.onNext(null); };
 
-        var objectStore = transaction.objectStore(store);
-        var getRequest = objectStore.get(key);
-        getRequest.onsuccess = (success: any) => { observer.onNext(success.target.result); };
-        getRequest.onerror = (error: any) => { observer.onNext(null); };
+        var objectStore: IDBObjectStore = transaction.objectStore(store);
+        var getRequest: IDBRequest = objectStore.get(key);
+        getRequest.onsuccess = (success: Event) => { observer.onNext(getRequest.result); };
+        getRequest.onerror = (error: ErrorEvent) => { observer.onNext(null); };
       });
     });
   }
@@ -124,15 +123,15 @@ export class IndexedDB implements Idb {
    * Store an object by key in the given store.
    */
   put(store: string, key: string, value: Object): Observable<boolean> {
-    return this._dbConnection.flatMap((idbDatabase: any) => {
+    return this._dbConnection.flatMap((idbDatabase: IDBDatabase) => {
       return Observable.create<boolean>((observer: Rx.Observer<boolean>) => {
-        var transaction = idbDatabase.transaction([store], IndexedDB.READ_WRITE);
-        transaction.onerror = (error: any) => { observer.onNext(false); };
+        var transaction: IDBTransaction = idbDatabase.transaction([store], IndexedDB.READ_WRITE);
+        transaction.onerror = (error: ErrorEvent) => { observer.onNext(false); };
 
-        var objectStore = transaction.objectStore(store);
-        var putRequest = objectStore.put(value, key);
-        putRequest.onsuccess = (success: any) => { observer.onNext(true); };
-        putRequest.onerror = (error: any) => { observer.onNext(false); };
+        var objectStore: IDBObjectStore = transaction.objectStore(store);
+        var putRequest: IDBRequest = objectStore.put(value, key);
+        putRequest.onsuccess = (success: Event) => { observer.onNext(true); };
+        putRequest.onerror = (error: ErrorEvent) => { observer.onNext(false); };
       });
     });
   }
@@ -141,15 +140,15 @@ export class IndexedDB implements Idb {
    * Remove the given key from the given store.
    */
   remove(store: string, key: string): Observable<boolean> {
-    return this._dbConnection.flatMap((idbDatabase: any) => {
+    return this._dbConnection.flatMap((idbDatabase: IDBDatabase) => {
       return Observable.create<boolean>((observer: Rx.Observer<boolean>) => {
-        var transaction = idbDatabase.transaction([store], IndexedDB.READ_WRITE);
-        transaction.onerror = (error: any) => { observer.onNext(false); };
+        var transaction: IDBTransaction = idbDatabase.transaction([store], IndexedDB.READ_WRITE);
+        transaction.onerror = (error: ErrorEvent) => { observer.onNext(false); };
 
-        var objectStore = transaction.objectStore(store);
-        var removeRequest = objectStore.remove(key);
-        removeRequest.onsuccess = (success: any) => { observer.onNext(true); };
-        removeRequest.onerror = (error: any) => { observer.onNext(false); };
+        var objectStore: IDBObjectStore = transaction.objectStore(store);
+        var removeRequest: IDBRequest = objectStore.delete(key);
+        removeRequest.onsuccess = (success: Event) => { observer.onNext(true); };
+        removeRequest.onerror = (error: ErrorEvent) => { observer.onNext(false); };
       });
     });
   }
