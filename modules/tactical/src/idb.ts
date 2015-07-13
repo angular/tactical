@@ -1,6 +1,6 @@
 /// <reference path="../../../typings/rx/rx.all.d.ts" />
 
-import {Observable, ReplaySubject} from 'rx';
+import {Observable, ReplaySubject, Scheduler} from 'rx';
 
 /**
  * A Factory type to produce Idb compatible objects. Requires a database name for the Idb
@@ -40,9 +40,9 @@ export class InMemoryIdb implements Idb {
    */
   get(store: string, key: string): Observable<Object> {
     if (!this.db.hasOwnProperty(store)) {
-      return Observable.from([null]);
+      return Observable.just<Object>(null, Scheduler.currentThread);
     }
-    return Observable.from([this.db[store][key]]);
+    return Observable.just<Object>(this.db[store][key], Scheduler.currentThread);
   }
 
   /**
@@ -50,10 +50,10 @@ export class InMemoryIdb implements Idb {
    */
   put(store: string, key: string, value: Object): Observable<boolean> {
     if (!this.db.hasOwnProperty(store)) {
-      return Observable.from([false]);
+      return Observable.just<boolean>(false, Scheduler.currentThread);
     }
     this.db[store][key] = value;
-    return Observable.from([true]);
+    return Observable.just<boolean>(true, Scheduler.currentThread);
   }
 
   /**
@@ -61,11 +61,11 @@ export class InMemoryIdb implements Idb {
    */
   remove(store: string, key: string): Observable<boolean> {
     if (!this.db.hasOwnProperty(store)) {
-      return Observable.from([false]);
+      return Observable.just<boolean>(false, Scheduler.currentThread);
     }
     if (this.db[store].hasOwnProperty(key)) {
       delete this.db[store][key];
-      return Observable.from([true]);
+      return Observable.just<boolean>(true, Scheduler.currentThread);
     }
   }
 }

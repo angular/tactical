@@ -17,7 +17,7 @@
  * each combination should identify a single Record.
  */
 
-import {Observable} from 'rx';
+import {Observable, Scheduler} from 'rx';
 
 import {Idb, IdbFactory} from './idb';
 import {serializeValue} from './json';
@@ -184,9 +184,11 @@ export class TacticalStore implements Store {
  * An implementation of a Store that does nothing.
  */
 export class NoopStore implements Store {
-  fetch(key: Object, version?: string): Observable<Record> { return Observable.empty<Record>(); }
+  fetch(key: Object, version?: string): Observable<Record> {
+    return Observable.just<Record>(null, Scheduler.currentThread);
+  }
 
   commit(key: Object, value: Object, version: string): Observable<boolean> {
-    return Observable.from<boolean>([true]);
+    return Observable.just<boolean>(true, Scheduler.currentThread);
   }
 }

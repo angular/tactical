@@ -53,12 +53,10 @@ describe('DataManager', () => {
     var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
     ts.commit({key: true}, {foo: 'goodbye'}, 'v1')
-        .subscribe(() => {
-          dm.request({key: true})
-              .subscribe((data) => {
-                expect(data['foo']).to.equal('goodbye');
-                done();
-              });
+        .flatMap((ok: boolean) => { return dm.request({key: true}); })
+        .subscribe((data: Object) => {
+          expect(data['foo']).to.equal('goodbye');
+          done();
         });
   });
   it('serves from TacticalStore and then the backend', (done) => {
@@ -66,19 +64,17 @@ describe('DataManager', () => {
     var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
     be.load(_versioned('v1', {key: true}, {foo: 'goodbye'}), false);
+    var first = true;
     ts.commit({key: true}, {foo: 'hello'}, 'v1')
-        .subscribe(() => {
-          var first = true;
-          dm.request({key: true})
-              .subscribe((data) => {
-                if (first) {
-                  expect(data['foo']).to.equal('hello');
-                  first = false;
-                } else {
-                  expect(data['foo']).to.equal('goodbye');
-                  done();
-                }
-              });
+        .flatMap((ok: boolean) => { return dm.request({key: true}); })
+        .subscribe((data: Object) => {
+          if (first) {
+            expect(data['foo']).to.equal('hello');
+            first = false;
+          } else {
+            expect(data['foo']).to.equal('goodbye');
+            done();
+          }
         });
   });
 });
