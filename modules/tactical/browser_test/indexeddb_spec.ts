@@ -59,6 +59,22 @@ describe('IndexedDB', function() {
           done();
         });
   });
+  
+  it('can remove previously stored objects', (done) => {
+    idb.put('x', 'foo', {'bar': 'baz'})
+        .flatMap((v1: boolean) => {
+          expect(v1).to.be.true;
+          return idb.remove('x', 'foo');
+        })
+        .flatMap((v2: boolean) => {
+          expect(v2).to.be.true;
+          return idb.get('x', 'foo');
+        })
+        .subscribe((v3: Object) => {
+          expect(v3).to.be.undefined;
+          done();
+        });
+  });
 
   it('returns undefined for non-existent keys', (done) => {
     idb.get('x', 'not-there')
