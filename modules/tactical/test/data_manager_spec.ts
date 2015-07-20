@@ -3,8 +3,7 @@
 
 import {FakeBackend, VersionedObject} from '../src/backend';
 import {TacticalDataManager} from '../src/data_manager';
-import {NoopStore, TacticalStore} from '../src/tactical_store';
-import {Record} from '../src/record';
+import {NoopStore, Record, TacticalStore} from '../src/tactical_store';
 import {InMemoryIdbFactory} from '../src/idb';
 import {expect} from 'chai';
 
@@ -43,7 +42,7 @@ describe('DataManager', () => {
     be.load(_versioned('v1', {key: true}, {foo: 'hello'}));
     ts.fetch({key: true})
         .subscribe((data: Record) => {
-          expect(data.version).to.equal('v1');
+          expect(data.version.base).to.equal('v1');
           expect(data.value).to.deep.equal({foo: 'hello'});
           done();
         });
@@ -52,7 +51,7 @@ describe('DataManager', () => {
     var be = new FakeBackend();
     var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
-    ts.commit({key: true}, {foo: 'goodbye'}, 'v1')
+    ts.push({key: true}, {foo: 'goodbye'}, 'v1')
         .flatMap((ok: boolean) => { return dm.request({key: true}); })
         .subscribe((data: Object) => {
           expect(data['foo']).to.equal('goodbye');
@@ -65,7 +64,7 @@ describe('DataManager', () => {
     var dm = new TacticalDataManager(be, ts);
     be.load(_versioned('v1', {key: true}, {foo: 'goodbye'}), false);
     var first = true;
-    ts.commit({key: true}, {foo: 'hello'}, 'v1')
+    ts.push({key: true}, {foo: 'hello'}, 'v1')
         .flatMap((ok: boolean) => { return dm.request({key: true}); })
         .subscribe((data: Object) => {
           if (first) {

@@ -13,6 +13,7 @@ export type IdbFactory = (database: string, stores: string[]) => Idb;
  * layer over IndexedDB.
  */
 export interface Idb {
+  keys(store: string): Observable<string>;
   get(store: string, key: string): Observable<Object>;
   put(store: string, key: string, value: Object): Observable<boolean>;
   remove(store: string, key: string): Observable<boolean>;
@@ -33,6 +34,16 @@ export var InMemoryIdbFactory: IdbFactory = (database: string, stores: string[])
  */
 export class InMemoryIdb implements Idb {
   constructor(public db: Object) {}
+
+  /**
+   * Emits all the keys present in the given store.
+   */
+  keys(store: string): Observable<string> {
+    if (!this.db.hasOwnProperty(store)) {
+      return Observable.empty<string>();
+    }
+    return Observable.from<string>(Object.keys(this.db[store]));
+  }
 
   /**
    * Retrieve the object associated with a key from the given store, or return
@@ -60,13 +71,11 @@ export class InMemoryIdb implements Idb {
    * Remove the given key from the given store.
    */
   remove(store: string, key: string): Observable<boolean> {
-    if (!this.db.hasOwnProperty(store)) {
+    if (!this.db.hasOwnProperty(store) || !this.db[store].hasOwnProperty(key)) {
       return Observable.just<boolean>(false, Scheduler.currentThread);
     }
-    if (this.db[store].hasOwnProperty(key)) {
-      delete this.db[store][key];
-      return Observable.just<boolean>(true, Scheduler.currentThread);
-    }
+    delete this.db[store][key];
+    return Observable.just<boolean>(true, Scheduler.currentThread);
   }
 }
 
@@ -100,6 +109,27 @@ export class IndexedDB implements Idb {
   static READ_WRITE: string = 'readwrite';
 
   constructor(private _dbConnection: ReplaySubject<IDBDatabase>) {}
+
+  /**
+   * Emits all the keys present in the given store.
+   */
+  keys(store: string): Observable<string> {
+    return this._dbConnection.flatMap((idbDatabase: IDBDatabase) => {
+      return Observable.create<string>((observer: Rx.Observer<string>) => {
+        var transaction: IDBTransaction = idbDatabase.transaction([store]);
+        transaction.onerror = (error: ErrorEvent) => { observer.onNext(null); };
+
+        var objectStore: IDBObjectStore = transaction.objectStore(store);
+        objectStore.openCursor().onsuccess = (success: Event) => {
+          var cursor: IDBCursor = (<any>event.target).result;
+          if (cursor) {
+            observer.onNext(cursor.key);
+            cursor.continue();
+          }
+        };
+      });
+    });
+  }
 
   /**
    * Retrieve the object associated with a key from the given store, or return
