@@ -59,7 +59,7 @@ describe('IndexedDB', function() {
           done();
         });
   });
-  
+
   it('can remove previously stored objects', (done) => {
     idb.put('x', 'foo', {'bar': 'baz'})
         .flatMap((v1: boolean) => {
