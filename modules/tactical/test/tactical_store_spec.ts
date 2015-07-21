@@ -2,140 +2,341 @@
 /// <reference path="../../../typings/mocha/mocha.d.ts" />
 
 import {expect} from 'chai';
-
-import {Idb, InMemoryIdbFactory} from '../src/idb';
-import {serializeValue} from '../src/json';
-import {ChainKey, RecordKey, TacticalStore} from '../src/tactical_store';
-import {Record} from '../src/record';
-
-
-describe("ChainKey", () => {
-
-  var key: Object = {key: 'id'};
-  var chainKey: ChainKey = new ChainKey(key);
-
-  it("should contain the key that was provided", (done) => {
-    expect(chainKey.key['key']).to.equal(key['key']);
-    done();
-  });
-
-  it("should serialize the key provided", (done) => {
-    expect(chainKey.serial).to.equal(serializeValue(key));
-    done();
-  });
-
-});
-
-describe("RecordKey", () => {
-
-  var version: string = 'foo';
-  var chainKey: ChainKey = new ChainKey({key: 'id'});
-  var recordKey: RecordKey = new RecordKey(version, chainKey);
-
-  it("should contain provided version and provided key", (done) => {
-    expect(recordKey.version).to.equal(version);
-    expect(recordKey.chain.key['key']).to.equal(chainKey.key['key']);
-    done();
-  });
-
-  it("should return the serialized string of the version and key", (done) => {
-    expect(recordKey.serial).to.equal(version + chainKey.serial);
-    done();
-  });
-
-});
+import {InMemoryIdbFactory} from '../src/idb';
+import {
+  Record,
+  ErrorDM,
+  ErrorITV,
+  StoreError,
+  StoreErrorType,
+  TacticalStore,
+  Version
+} from '../src/tactical_store';
 
 describe("Tactical Store", () => {
 
-  var chainKey: ChainKey = new ChainKey({key: 'id'});
-  var fooValue: Object = {foo: 'foo'};
-  var fooKey: RecordKey = new RecordKey('foo', chainKey);
-  var barValue: Object = {foo: 'bar'};
-  var barKey: RecordKey = new RecordKey('bar', chainKey);
+  var key: Object = {key: 'key'};
+  var notkey: Object = {key: 'notkey'};
 
-  it("should store new Records", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+  var foobase: string = 'foobase';
+  var barbase: string = 'barbase';
+  var notbase: string = 'notbase';
 
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
+  var foo: Object = {value: 'foo'};
+  var foobaz: Object = {value: 'foobaz'};
+  var bar: Object = {value: 'bar'};
+
+  it("should fetch the most recently committed or pushed Record", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
         .flatMap((ok: boolean) => {
           expect(ok).to.be.true;
-          return tacStore.fetch(chainKey.key);
-        })
-        .subscribe((record: Record) => {
-          expect(record.value['foo']).to.equal(fooValue['foo']);
-          done();
-        });
-  });
-
-  it("should return the most recent Record when passed only a key", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
-
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .flatMap((ok: boolean) => {
-          expect(ok).to.be.true;
-          return tacStore.commit(barKey.chain.key, barValue, barKey.version);
-        })
-        .flatMap((ok: boolean) => {
-          expect(ok).to.be.true;
-          return tacStore.fetch(chainKey.key);
-        })
-        .subscribe((record: Record) => {
-          expect(record.version).to.equal(barKey.version);
-          expect(record.value['foo']).to.equal(barValue['foo']);
-          done();
-        });
-  });
-
-  it("should return null with a non-matching key", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
-    var otherKey: ChainKey = new ChainKey({key: 'otherId'});
-
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .flatMap((ok: boolean) => {
-          expect(ok).to.be.true;
-          return tacStore.fetch(otherKey.key);
-        })
-        .subscribe((record: Record) => {
-          expect(record).to.be.null;
-          done();
-        });
-  });
-
-  it("should return the correct Record when passed a key and a version", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
-
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
-        .flatMap((ok: boolean) => {
-          expect(ok).to.be.true;
-          return tacStore.commit(barKey.chain.key, barValue, barKey.version);
-        })
-        .flatMap((ok: boolean) => {
-          expect(ok).to.be.true;
-          return tacStore.fetch(fooKey.chain.key, fooKey.version);
+          return ts.fetch(key);
         })
         .flatMap((record: Record) => {
-          expect(record.version).to.equal(fooKey.version);
-          expect(record.value['foo']).to.equal(fooValue['foo']);
-          return tacStore.fetch(barKey.chain.key, barKey.version);
+          expect(record.version.base).to.equal(foobase);
+          expect(record.value['value']).to.equal('foo');
+          return ts.commit(key, foobaz, new Version(foobase));
         })
-        .subscribe((record: Record) => {
-          expect(record.version).to.equal(barKey.version);
-          expect(record.value['foo']).to.equal(barValue['foo']);
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.fetch(key);
+        })
+        .subscribeOnNext((record: Record) => {
+          var mutation: Version = new Version(foobase).next;
+          expect(record.version.isEqual(mutation.base, mutation.sub)).to.be.true;
+          expect(record.value['value']).to.equal('foobaz');
+          done();
+        });
+  });
+  it("should fetch a specific Record", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.fetch(key, new Version(foobase));
+        })
+        .subscribeOnNext((record: Record) => {
+          expect(record.version.base).to.equal(foobase);
+          expect(record.value['value']).to.equal('foo');
+          done();
+        });
+  });
+  it("should fetch null for a non-matching key or version", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.fetch(notkey, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.be.null;
+          return ts.fetch(key, new Version(notbase));
+        })
+        .subscribeOnNext((record: Record) => {
+          expect(record).to.be.null;
           done();
         });
   });
 
-  it("should return null with a non-matching version", (done) => {
-    var tacStore: TacticalStore = new TacticalStore(InMemoryIdbFactory);
-
-    tacStore.commit(fooKey.chain.key, fooValue, fooKey.version)
+  it("should store a Record into the store as the most recent version", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
         .flatMap((ok: boolean) => {
           expect(ok).to.be.true;
-          return tacStore.fetch(fooKey.chain.key, barKey.version);
+          return ts.push(key, bar, barbase);
         })
-        .subscribe((record: Record) => {
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.fetch(key);
+        })
+        .subscribeOnNext((record: Record) => {
+          expect(record.version.base).to.equal(barbase);
+          expect(record.value['value']).to.equal('bar');
+          done();
+        });
+  });
+  it("should remove the previous Record, if there is no pending mutation", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.push(key, bar, barbase);
+        })
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.fetch(key, new Version(foobase));
+        })
+        .subscribeOnNext((record: Record) => {
           expect(record).to.be.null;
           done();
+        });
+  });
+  it("should throw a deprecated mutation error", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.push(key, bar, barbase);
+        })
+        .subscribeOnError((error: ErrorDM) => {
+          expect(error.type).to.equal(StoreErrorType.DeprecatedMutation);
+          expect(error.initial.value['value']).to.equal('foo');
+          expect(error.mutation.value['value']).to.equal('foobaz');
+          expect(error.current.value['value']).to.equal('bar');
+          done();
+        });
+  });
+  it("should remove the previous deprecated mutation", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.push(key, bar, barbase);
+        })
+        .subscribeOnError((error: StoreError) => {
+          return ts.commit(key, foobaz, new Version(barbase))
+              .flatMap((record: Record) => {
+                expect(record).to.not.be.null;
+                return ts.push(key, foo, notbase);
+              })
+              .subscribeOnError((otherError: StoreError) => {
+                return ts.fetch(key, new Version(foobase))
+                    .flatMap((record: Record) => {
+                      expect(record).to.be.null;
+                      var mutationVersion: Version = new Version(foobase).next;
+                      return ts.fetch(key, mutationVersion);
+                    })
+                    .subscribeOnNext((record: Record) => {
+                      expect(record).to.be.null;
+                      done();
+                    });
+              });
+        });
+  });
+
+  it("should store a pending mutation into the store", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .subscribe((record: Record) => {
+          var mutation: Version = new Version(foobase).next;
+          expect(record.version.isEqual(mutation.base, mutation.sub)).to.be.true;
+          expect(record.value['value']).to.equal('foobaz');
+          done();
+        });
+  });
+  it("should throw an invalid target version error", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, bar, new Version(barbase));
+        })
+        .subscribeOnError((error: ErrorITV) => {
+          expect(error.type).to.equal(StoreErrorType.InvalidTargetVersion);
+          expect(error.target.base).to.equal('barbase');
+          expect(error.mutation['value']).to.equal('bar');
+          expect(error.current.value['value']).to.equal('foo');
+          done();
+        });
+  });
+  it("should remove the previous mutation, if one exists", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((foobazRecord: Record) => {
+          expect(foobazRecord).to.not.be.null;
+          return ts.commit(key, bar, foobazRecord.version)
+              .map((barRecord: Record) => { return foobazRecord; });
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.fetch(key, record.version);
+        })
+        .subscribeOnNext((record: Record) => {
+          expect(record).to.be.null;
+          done();
+        });
+  });
+  it("should emit null and not emit any errors for a non-matching key", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(notkey, foobaz, new Version(foobase));
+        })
+        .subscribeOnNext((record: Record) => {
+          expect(record).to.be.null;
+          done();
+        });
+  });
+
+  it("should remove the pending mutation associated with a key and base", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.rollback(key, foobase);
+        })
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          var mutation: Version = new Version(foobase).next;
+          return ts.fetch(key, mutation);
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.be.null;
+          return ts.fetch(key);
+        })
+        .subscribeOnNext((record: Record) => {
+          var version: Version = new Version(foobase);
+          expect(record.version.isEqual(version.base, version.sub)).to.be.true;
+          expect(record.value['value']).to.equal('foo');
+          done();
+        });
+  });
+  it("should remove all Records associated with the base, if the provided base is not current",
+     (done) => {
+       var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+       ts.push(key, foo, foobase)
+           .flatMap((ok: boolean) => {
+             expect(ok).to.be.true;
+             return ts.commit(key, foobaz, new Version(foobase));
+           })
+           .flatMap((record: Record) => {
+             expect(record).to.not.be.null;
+             return ts.push(key, bar, barbase);
+           })
+           .subscribeOnError((error: StoreError) => {
+             ts.rollback(key, foobase)
+                 .flatMap((ok: boolean) => {
+                   expect(ok).to.be.true;
+                   return ts.fetch(key, new Version(foobase));
+                 })
+                 .flatMap((record: Record) => {
+                   expect(record).to.be.null;
+                   var mutationVersion: Version = new Version(foobase).next;
+                   return ts.fetch(key, mutationVersion);
+                 })
+                 .subscribeOnNext((record: Record) => {
+                   expect(record).to.be.null;
+                   done();
+                 });
+           });
+     });
+  it("should emit false and not emit any errors for a non-matching key or base", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.rollback(notkey, foobase);
+        })
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.false;
+          return ts.rollback(key, notbase);
+        })
+        .subscribeOnNext((ok: boolean) => {
+          expect(ok).to.be.false;
+          done();
+        });
+  });
+
+  it("should emit pending mutations", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.pending();
+        })
+        .subscribeOnNext((record: Record) => {
+          var mutversion: Version = new Version(foobase).next;
+          expect(record.version.isEqual(mutversion.base, mutversion.sub)).to.be.true;
+          expect(record.value['value']).to.equal('foobaz');
+          done();
+        });
+  });
+  it("should throw deperecated mutation errors when checking for pending mutations", (done) => {
+    var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
+    ts.push(key, foo, foobase)
+        .flatMap((ok: boolean) => {
+          expect(ok).to.be.true;
+          return ts.commit(key, foobaz, new Version(foobase));
+        })
+        .flatMap((record: Record) => {
+          expect(record).to.not.be.null;
+          return ts.push(key, bar, barbase);
+        })
+        .subscribeOnError((error: StoreError) => {
+          ts.pending().subscribeOnError((otherError: ErrorDM) => {
+            var mutversion: Version = new Version(foobase).next;
+            expect(otherError.type).to.equal(StoreErrorType.DeprecatedMutation);
+            expect(otherError.initial.value['value']).to.equal('foo');
+            expect(otherError.mutation.value['value']).to.equal('foobaz');
+            expect(otherError.current.value['value']).to.equal('bar');
+            done();
+          });
         });
   });
 

@@ -4,8 +4,7 @@ import {Observable, Observer, Subject} from 'rx';
 import {Backend, VersionedObject} from './backend';
 import {serializeValue} from './json';
 import {Stream} from './stream';
-import {Store} from './tactical_store';
-import {Record} from './record';
+import {Record, Store} from './tactical_store';
 
 /**
  * Manages subscriptions to data, and acts as an interface for the application.
@@ -31,7 +30,7 @@ export class TacticalDataManager implements DataManager {
    */
   private _backendData(data: VersionedObject): void {
     var keyStr = serializeValue(data.key);
-    this._store.commit(data.key, data.data, data.version).subscribe();
+    this._store.push(data.key, data.data, data.version).subscribe();
     if (this._stream.hasOwnProperty(keyStr)) {
       this._stream[keyStr].send(data.data);
     }
