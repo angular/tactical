@@ -112,7 +112,7 @@ describe("Tactical Store", () => {
           done();
         });
   });
-  it("should throw a pending mutation error", (done) => {
+  it("should throw a deprecated mutation error", (done) => {
     var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
     ts.push(key, foo, foobase)
         .flatMap((ok: boolean) => {
@@ -123,15 +123,15 @@ describe("Tactical Store", () => {
           expect(record).to.not.be.null;
           return ts.push(key, bar, barbase);
         })
-        .subscribeOnError((error: StoreError) => {
+        .subscribeOnError((error: ErrorDM) => {
           expect(error.type).to.equal(StoreErrorType.DeprecatedMutation);
-          expect((<ErrorDM>error).deprecated.value['value']).to.equal('foo');
-          expect((<ErrorDM>error).mutation.value['value']).to.equal('foobaz');
-          expect((<ErrorDM>error).current.value['value']).to.equal('bar');
+          expect(error.initial.value['value']).to.equal('foo');
+          expect(error.mutation.value['value']).to.equal('foobaz');
+          expect(error.current.value['value']).to.equal('bar');
           done();
         });
   });
-  it("should remove the previous pending mutation", (done) => {
+  it("should remove the previous deprecated mutation", (done) => {
     var ts: TacticalStore = new TacticalStore(InMemoryIdbFactory);
     ts.push(key, foo, foobase)
         .flatMap((ok: boolean) => {
@@ -184,11 +184,11 @@ describe("Tactical Store", () => {
           expect(ok).to.be.true;
           return ts.commit(key, bar, new Version(barbase));
         })
-        .subscribeOnError((error: StoreError) => {
+        .subscribeOnError((error: ErrorITV) => {
           expect(error.type).to.equal(StoreErrorType.InvalidTargetVersion);
-          expect((<ErrorITV>error).target.base).to.equal('barbase');
-          expect((<ErrorITV>error).mutation['value']).to.equal('bar');
-          expect((<ErrorITV>error).current.value['value']).to.equal('foo');
+          expect(error.target.base).to.equal('barbase');
+          expect(error.mutation['value']).to.equal('bar');
+          expect(error.current.value['value']).to.equal('foo');
           done();
         });
   });
@@ -329,12 +329,12 @@ describe("Tactical Store", () => {
           return ts.push(key, bar, barbase);
         })
         .subscribeOnError((error: StoreError) => {
-          ts.pending().subscribeOnError((dmerror: ErrorDM) => {
+          ts.pending().subscribeOnError((otherError: ErrorDM) => {
             var mutversion: Version = new Version(foobase).next;
-            expect(dmerror.type).to.equal(StoreErrorType.DeprecatedMutation);
-            expect(dmerror.deprecated.value['value']).to.equal('foo');
-            expect(dmerror.mutation.value['value']).to.equal('foobaz');
-            expect(dmerror.current.value['value']).to.equal('bar');
+            expect(otherError.type).to.equal(StoreErrorType.DeprecatedMutation);
+            expect(otherError.initial.value['value']).to.equal('foo');
+            expect(otherError.mutation.value['value']).to.equal('foobaz');
+            expect(otherError.current.value['value']).to.equal('bar');
             done();
           });
         });

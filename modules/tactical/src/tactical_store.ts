@@ -19,7 +19,7 @@
 
 import {Observable, Scheduler} from 'rx';
 
-import {Idb, IdbFactory} from './idb';
+import {Idb, IdbFactory, IdbTransaction} from './idb';
 import {serializeValue} from './json';
 
 // Types persisted in cache.
@@ -175,9 +175,9 @@ export interface StoreError { type: StoreErrorType; }
  * The implementation of the DeprecatedMutation error type.
  */
 export interface ErrorDM extends StoreError {
-  deprecated: Record;  // Record of the deprecated version
-  mutation: Record;    // Record of the mutation on the deprecated version
-  current: Record;     // Record which is considered current by the store
+  initial: Record;   // Record of the deprecated initial version
+  mutation: Record;  // Record of the mutation on the deprecated version
+  current: Record;   // Record which is considered current by the store
 }
 
 /**
@@ -278,7 +278,6 @@ export class TacticalStore implements Store {
       return this._fetchRecord(new RecordKey(chainKey, version));
     }
     return this._idb.get(TacticalStore._chains, chainKey.serial)
-        .take(1)
         .flatMap((state: ChainState) => {
           if (!state || !state.current) {
             return Observable.just<Record>(null);
@@ -289,8 +288,7 @@ export class TacticalStore implements Store {
                   return Observable.just<Record>(record);
                 }
                 if (!state.backup) {
-                  // if operations are isolated, this should never happen
-                  return Observable.just<Record>(null);
+                  return Observable.just<Record>(null);  // state is corrupted
                 }
                 // the chain state might be corrupted, check if a backup Record exists
                 return this._fetchRecord(new RecordKey(chainKey, Version.from(state.backup)));
@@ -307,90 +305,65 @@ export class TacticalStore implements Store {
    */
   push(key: Object, value: Object, base: string): Observable<boolean> {
     var pushKey: RecordKey = new RecordKey(new ChainKey(key), new Version(base));
-    return this._idb.get(TacticalStore._chains, pushKey.chain.serial)
-        .take(1)
-        .flatMap((state: ChainState) => {
-          if (!state) {
-            state = {current: null, backup: null, deprecated: null};
-          }
-          // mark that a new Record is being persisted
-          state.current = pushKey.version.value;
-          return this._idb.put(TacticalStore._chains, pushKey.chain.serial, state)
-              .take(1)
-              .flatMap((ok: boolean) => {
-                if (!ok) {
-                  // 'push' failed due to complication with idb
-                  return Observable.just<boolean>(false);
+    return this._idb.transaction([TacticalStore._chains, TacticalStore._records])
+        .flatMap((transaction: IdbTransaction) => {
+          return transaction.get(TacticalStore._chains, pushKey.chain.serial)
+              .flatMap((state: ChainState) => {
+
+                if (!state) {
+                  state = {current: null, backup: null, deprecated: null};  // first 'push'
                 }
-                return this._idb.put(TacticalStore._records, pushKey.serial, value)
-                    .take(1)
+
+                state.current = pushKey.version.value;  // mark that a Record is being stored
+
+                return transaction.put(TacticalStore._chains, pushKey.chain.serial, state)
                     .flatMap((ok: boolean) => {
                       if (!ok) {
-                        // chain state is now corrupted: 'current' references a null Record
-                        return Observable.just<boolean>(false);
+                        return Observable.just<boolean>(false);  // Idb complication
                       }
-                      // if operations are AI, this should only happen at first 'push'
+                      return transaction.put(TacticalStore._records, pushKey.serial, value);
+                    })
+                    .flatMap((ok: boolean) => {
+                      if (!ok) {
+                        return Observable.just<boolean>(false);  // state is dirty
+                      }
                       if (!state.backup) {
-                        return Observable.just<boolean>(true);
+                        return Observable.just<boolean>(true);  // first 'push'
                       }
-                      var backupKey: RecordKey =
-                          new RecordKey(pushKey.chain, Version.from(state.backup));
-                      // check if there is a current pending mutation
-                      if (!backupKey.version.isInitial) {
-                        // throw a deprecated mutation error
-                        return this._fetchRecord(backupKey).flatMap((backup: Record) => {
-                          if (!backup) {
-                            // should only happen if the chain state is corrupted
-                            return Observable.just<boolean>(true);
-                          }
-                          var deprecatedKey: RecordKey =
-                              new RecordKey(backupKey.chain, backupKey.version.initial);
-                          return this._fetchRecord(deprecatedKey)
-                              .flatMap((deprecated: Record) => {
-                                if (!deprecated) {
-                                  // if operations are AI, this should never happen
-                                  return Observable.just<boolean>(false);
-                                }
-                                var current: Record = new Record(value, pushKey.version);
-                                var error: ErrorDM = {
-                                  type: StoreErrorType.DeprecatedMutation,
-                                  deprecated: deprecated,
-                                  mutation: backup,
-                                  current: current
-                                };
-                                if (!state.deprecated) {
-                                  // mark the current pending mutation as 'deprecated'
-                                  state.deprecated = backup.version.value;
-                                  return Observable.throw<boolean>(error);
-                                }
-                                // deprecated mutations follow highlander rules; there can be only
-                                // one!
-                                var depVersion: Version = Version.from(state.deprecated);
-                                return this._remove(pushKey.chain, depVersion.initial, depVersion)
-                                    .map((ok: boolean) => {
-                                      if (!ok) {
-                                        // chain state is corrupted: 'deprecated' Records still
-                                        // exist
-                                        return false;
-                                      }
-                                      // move pending mutation to 'deprecated'
-                                      state.deprecated = backup.version.value;
-                                      return true;
-                                    })
-                                    .merge(Observable.throw<boolean>(error));
-                              });
-                        });
+
+                      var backup: Version = Version.from(state.backup);
+
+                      // check if there is a pending mutation
+                      if (!backup.isInitial) {
+                        var current: Record = new Record(value, pushKey.version);
+                        if (!state.deprecated) {
+                          state.deprecated = backup.value;  // deprecate mutation
+                          return this._throwErrorDM(pushKey.chain, backup, current);
+                        }
+                        // deprecations follow highlander rules; there can be only one!
+                        return this._remove(transaction, pushKey.chain, state.deprecated)
+                            .flatMap((ok: boolean) => {
+                              if (!ok) {
+                                return Observable.just<boolean>(false);  // state is dirty
+                              }
+                              state.deprecated = backup.value;  // deprecate mutation
+                              return this._throwErrorDM(pushKey.chain, backup, current);
+                            });
                       }
+
                       // remove the previous Record if there is no pending mutation
-                      return this._remove(backupKey.chain, backupKey.version);
+                      return this._remove(transaction, pushKey.chain, backup.value);
+                    })
+                    .flatMap((ok: boolean) => {
+                      if (!ok) {
+                        return Observable.just<boolean>(false);  // state is dirty
+                      }
+                      state.backup = pushKey.version.value;  // finalize Record
+                      return transaction.put(TacticalStore._chains, pushKey.chain.serial, state);
                     });
-              })
-              .flatMap((ok: boolean) => {
-                // mark new Record as finalized
-                state.backup = pushKey.version.value;
-                return this._idb.put(TacticalStore._chains, pushKey.chain.serial, state).take(1);
               });
-        });
+        })
+        .take(1);
   }
 
   /**
@@ -404,62 +377,52 @@ export class TacticalStore implements Store {
    */
   commit(key: Object, mutation: Object, target: Version): Observable<Record> {
     var targetKey: RecordKey = new RecordKey(new ChainKey(key), target);
-    return this._idb.get(TacticalStore._chains, targetKey.chain.serial)
-        .take(1)
-        .flatMap((state: ChainState) => {
-          if (!state || !state.current) {
-            // can't commit against an empty chain
-            return Observable.just<Record>(null);
-          }
-          // check that the mutation is against the current version
-          if (!target.isEqual(state.current.base, state.current.sub)) {
-            return this.fetch(key).flatMap((record: Record) => {
-              // throw an invalid target version error
-              var error: ErrorITV = {
-                type: StoreErrorType.InvalidTargetVersion,
-                target: target,
-                mutation: mutation,
-                current: record
-              };
-              return Observable.throw<Record>(error);
-            });
-          }
-          var mutKey: RecordKey = new RecordKey(targetKey.chain, target.next);
-          var mutRecord: Record = new Record(mutation, mutKey.version);
-          // mark that a new Record is being persisted
-          state.current = mutKey.version.value;
-          return this._idb.put(TacticalStore._chains, targetKey.chain.serial, state)
-              .take(1)
-              .flatMap((ok: boolean) => {
-                if (!ok) {
-                  // 'commit' failed due to idb complication
-                  return Observable.just<boolean>(false);
+    return this._idb.transaction([TacticalStore._chains, TacticalStore._records])
+        .flatMap((transaction: IdbTransaction) => {
+          return transaction.get(TacticalStore._chains, targetKey.chain.serial)
+              .flatMap((state: ChainState) => {
+
+                if (!state || !state.current) {
+                  return Observable.just<Record>(null);
                 }
-                return this._idb.put(TacticalStore._records, mutKey.serial, mutation)
-                    .take(1)
+
+                // mutation should target the current version
+                if (!target.isEqual(state.current.base, state.current.sub)) {
+                  return this._throwErrorITV(key, mutation, target);
+                }
+
+                var mutRcd: Record = new Record(mutation, target.next);
+                var mutKey: RecordKey = new RecordKey(targetKey.chain, mutRcd.version);
+                state.current = mutRcd.version.value;  // mark that a Record is being stored
+
+                return transaction.put(TacticalStore._chains, targetKey.chain.serial, state)
                     .flatMap((ok: boolean) => {
                       if (!ok) {
-                        // chain state is corrupted: 'current' references a null Record
-                        return Observable.just<boolean>(false);
+                        return Observable.just<boolean>(false);  // Idb complication
                       }
-                      // don't remove initial versions
-                      if (target.sub == 0) {
-                        return Observable.just<boolean>(true);
+                      return transaction.put(TacticalStore._records, mutKey.serial, mutation);
+                    })
+                    .flatMap((ok: boolean) => {
+                      if (!ok) {
+                        return Observable.just<boolean>(false);  // state is dirty
+                      }
+                      if (target.isInitial) {
+                        return Observable.just<boolean>(true);  // don't remove intial versions
                       }
                       // mutations follow highlander rules; there can be only one!
-                      return this._remove(targetKey.chain, targetKey.version);
-                    });
-              })
-              .flatMap((ok: boolean) => {
-                if (!ok) {
-                  return Observable.just<boolean>(false);
-                }
-                // mark new Record as finalized
-                state.backup = mutKey.version.value;
-                return this._idb.put(TacticalStore._chains, targetKey.chain.serial, state).take(1);
-              })
-              .map((ok: boolean) => { return (ok) ? mutRecord : null; });
-        });
+                      return transaction.remove(TacticalStore._records, targetKey.serial);
+                    })
+                    .flatMap((ok: boolean) => {
+                      if (!ok) {
+                        return Observable.just<boolean>(false);  // state is dirty
+                      }
+                      state.backup = mutRcd.version.value;  // finalize Record
+                      return this._idb.put(TacticalStore._chains, targetKey.chain.serial, state);
+                    })
+                    .map((ok: boolean) => (ok) ? mutRcd : null);
+              });
+        })
+        .take(1);
   }
 
   /**
@@ -474,56 +437,56 @@ export class TacticalStore implements Store {
   rollback(key: Object, base: string): Observable<boolean> {
     var chainKey: ChainKey = new ChainKey(key);
     var target: Version = new Version(base);
-    return this._idb.get(TacticalStore._chains, chainKey.serial)
-        .take(1)
-        .flatMap((state: ChainState) => {
-          if (!state || !state.current) {
-            // can't rollback an empty chain
-            return Observable.just<boolean>(false);
-          }
-          // check if 'rollback' was called on the 'current' version
-          if (!target.isEqual(state.current.base)) {
-            if (!state.deprecated || !target.isEqual(state.deprecated.base)) {
-              // can't rollback a version that doesn't exist
-              return Observable.just<boolean>(false);
-            }
-            // calling 'rollback' on a 'deprecated' base is equivalent to removing it
-            return this._remove(chainKey, target, Version.from(state.deprecated))
-                .flatMap((ok: boolean) => {
-                  if (!ok) {
-                    // chain state is corrupted: 'deprecated' Records still exist
-                    return Observable.just<boolean>(false);
-                  }
-                  state.deprecated = null;
-                  return this._idb.put(TacticalStore._chains, chainKey.serial, state).take(1);
-                });
-          }
-          if (Version.from(state.current).isInitial) {
-            // no need to 'rollback' an initial version
-            return Observable.just<boolean>(true);
-          }
-          // mark that the initial version is being made 'current'
-          state.current = target.value;
-          return this._idb.put(TacticalStore._chains, chainKey.serial, state)
-              .take(1)
-              .flatMap((ok: boolean) => {
-                if (!ok) {
-                  // 'rollback' failed due to idb complication
+    return this._idb.transaction([TacticalStore._chains, TacticalStore._records])
+        .flatMap((transaction: IdbTransaction) => {
+          return transaction.get(TacticalStore._chains, chainKey.serial)
+              .flatMap((state: ChainState) => {
+
+                if (!state || !state.current) {
                   return Observable.just<boolean>(false);
                 }
-                // remove the pending mutation
-                return this._remove(chainKey, Version.from(state.backup))
+
+                // check if 'rollback' was called on the 'deprecated' version
+                if (!target.isEqual(state.current.base)) {
+                  if (!state.deprecated || !target.isEqual(state.deprecated.base)) {
+                    return Observable.just<boolean>(false);  // invalid target
+                  }
+                  // calling 'rollback' on a 'deprecated' base is equivalent to removing it
+                  return this._remove(transaction, chainKey, state.deprecated)
+                      .flatMap((ok: boolean) => {
+                        if (!ok) {
+                          return Observable.just<boolean>(false);  // state is dirty
+                        }
+                        state.deprecated = null;
+                        return this._idb.put(TacticalStore._chains, chainKey.serial, state);
+                      });
+                }
+
+                if (Version.from(state.current).isInitial) {
+                  return Observable.just<boolean>(true);
+                }
+
+                state.current = target.value;  // mark that a Record is being stored
+
+                return transaction.put(TacticalStore._chains, chainKey.serial, state)
                     .flatMap((ok: boolean) => {
                       if (!ok) {
-                        // chain state is corrupted: 'backup' references a null Record
-                        return Observable.just<boolean>(false);
+                        return Observable.just<boolean>(false);  // Idb complication
                       }
-                      // mark the initial version is finalized
-                      state.backup = target.value;
-                      return this._idb.put(TacticalStore._chains, chainKey.serial, state).take(1);
+                      // remove the pending mutation
+                      var mutKey: RecordKey = new RecordKey(chainKey, Version.from(state.backup));
+                      return transaction.remove(TacticalStore._records, mutKey.serial)
+                          .flatMap((ok: boolean) => {
+                            if (!ok) {
+                              return Observable.just<boolean>(false);  // state is dirty
+                            }
+                            state.backup = target.value;  // finalize Record
+                            return transaction.put(TacticalStore._chains, chainKey.serial, state);
+                          });
                     });
               });
-        });
+        })
+        .take(1);
   }
 
   /**
@@ -537,36 +500,32 @@ export class TacticalStore implements Store {
   pending(): Observable<Record> {
     return this._idb.keys(TacticalStore._chains)
         .flatMap((key: string) => {
-          var chainkey: ChainKey = new ChainKey(key);
-          return this._idb.get(TacticalStore._chains, chainkey.serial)
+          var chainKey: ChainKey = new ChainKey(key);
+
+          return this._idb.get(TacticalStore._chains, chainKey.serial)
               .take(1)
               .flatMap((state: ChainState) => {
-                var currversion: Version = Version.from(state.current);
+
+                if (!state || !state.current) {
+                  return Observable.just<Record>(null);
+                }
+
+                var current: Version = Version.from(state.current);
+
                 // check if there is a deprecated mutation
                 if (state.deprecated) {
-                  // throw a deprecated mutation error
-                  var depversion: Version = Version.from(state.deprecated);
-                  return this._fetchRecord(new RecordKey(chainkey, depversion))
-                      .flatMap((depmutation: Record) => {
-                        return this._fetchRecord(new RecordKey(chainkey, depversion.initial))
-                            .flatMap((deprecated: Record) => {
-                              return this._fetchRecord(new RecordKey(chainkey, currversion))
-                                  .flatMap((current: Record) => {
-                                    var error: ErrorDM = {
-                                      type: StoreErrorType.DeprecatedMutation,
-                                      deprecated: deprecated,
-                                      mutation: depmutation,
-                                      current: current
-                                    };
-                                    return Observable.throw<Record>(error);
-                                  });
-                            });
+                  return this._fetchRecord(new RecordKey(chainKey, current))
+                      .flatMap((currentRcd: Record) => {
+                        var deprecated: Version = Version.from(state.deprecated);
+                        return this._throwErrorDM(chainKey, deprecated, currentRcd);
                       });
                 }
+
                 // check if there is a pending mutation
-                if (!currversion.isInitial) {
-                  return this._fetchRecord(new RecordKey(chainkey, currversion));
+                if (!current.isInitial) {
+                  return this._fetchRecord(new RecordKey(chainKey, current));
                 }
+
                 return Observable.empty<Record>();
               });
         });
@@ -579,31 +538,60 @@ export class TacticalStore implements Store {
    */
   private _fetchRecord(key: RecordKey): Observable<Record> {
     return this._idb.get(TacticalStore._records, key.serial)
-        .take(1)
-        .map((value: Object) => { return (value) ? new Record(value, key.version) : null; });
+        .map((value: Object) => { return (value) ? new Record(value, key.version) : null; })
+        .take(1);
   }
 
   /**
-   * Removes one or two Records from the store.
+   * Returns an Observable that will emit a deprecated mutation error.
+   */
+  private _throwErrorDM(key: ChainKey, mutation: Version, current: Record): Observable<any> {
+    var initRcd: Observable<Record> = this._fetchRecord(new RecordKey(key, mutation.initial));
+    var mutRcd: Observable<Record> = this._fetchRecord(new RecordKey(key, mutation));
+    return initRcd.forkJoin(mutRcd, (left: Record, right: Record) => {
+                    var error: ErrorDM = {
+                      type: StoreErrorType.DeprecatedMutation,
+                      initial: left,
+                      mutation: right,
+                      current: current
+                    };
+                    return error;
+                  }).flatMap((error: ErrorDM) => { return Observable.throw<any>(error); });
+  }
+
+  /**
+   * Returns an Observable that will emit a invalid target version error.
+   */
+  private _throwErrorITV(key: Object, mutation: Object, target: Version): Observable<any> {
+    return this.fetch(key).flatMap((record: Record) => {
+      var error: ErrorITV = {
+        type: StoreErrorType.InvalidTargetVersion,
+        target: target,
+        mutation: mutation,
+        current: record
+      };
+      return Observable.throw<any>(error);
+    });
+  }
+
+  /**
+   * Removes the Records from the store matching 'key' and 'version', including the initial
+   * version.
    *
-   * Removes the Record matching 'key' and 'v1' from the store. If 'v2' is provided, the Record
-   * matching 'key' and 'v2' will also be removed from the store.
-   *
-   * If the provided 'key' or Versions are non-matching, '_remove' will emit true. Otherwise,
+   * If the provided 'key' or 'version' are non-matching, '_remove' will emit true. Otherwise,
    * '_remove' will emit whether or not it was successful.
    */
-  private _remove(key: ChainKey, v1: Version, v2?: Version): Observable<boolean> {
-    var v1Key: RecordKey = new RecordKey(key, v1);
-    if (!v2) {
-      // only remove the first version
-      return this._idb.remove(TacticalStore._records, v1Key.serial).take(1);
+  private _remove(transaction: IdbTransaction, key: ChainKey,
+                  version: PlainVersion): Observable<boolean> {
+    var mutKey: RecordKey = new RecordKey(key, Version.from(version));
+    if (mutKey.version.isInitial) {
+      return transaction.remove(TacticalStore._records, mutKey.serial).take(1);
     }
-    // remove both versions
-    var v2Key: RecordKey = new RecordKey(key, v2);
-    return this._idb.remove(TacticalStore._records, v1Key.serial)
+    var initKey: RecordKey = new RecordKey(key, mutKey.version.initial);
+    return transaction.remove(TacticalStore._records, mutKey.serial)
         .take(1)
-        .forkJoin(this._idb.remove(TacticalStore._records, v2Key.serial).take(1),
-                  (v1Removed: boolean, v2Removed: boolean) => { return v1Removed && v2Removed; });
+        .forkJoin(transaction.remove(TacticalStore._records, initKey.serial).take(1),
+                  (left: boolean, right: boolean) => { return left && right; });
   }
 }
 
