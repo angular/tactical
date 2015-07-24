@@ -103,6 +103,11 @@ export class Version {
   private _value: PlainVersion;
   private _serial: string;
 
+  /** Returns a randomly generated integer id in the range of 1 to 2**32 (exclusive). */
+  private static _randomId(): number {
+    return Math.floor(Math.random() * (Math.pow(2, 32) - 1)) + 1;
+  }
+
   /** Returns a new Version instance with the same base and sub as 'version'. */
   static from(version: PlainVersion): Version { return new Version(version.base, version.sub); }
 
@@ -127,7 +132,7 @@ export class Version {
   get initial(): Version { return new Version(this.base); }
 
   /** Returns the next sub version associated with this Version. */
-  get next(): Version { return new Version(this.base, this.sub + 1); }
+  get next(): Version { return new Version(this.base, Version._randomId()); }
 
   /** Returns the base version. */
   get base(): string { return this._value.base; }

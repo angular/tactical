@@ -43,8 +43,6 @@ describe("Tactical Store", () => {
           return ts.fetch(key);
         })
         .subscribeOnNext((record: Record) => {
-          var mutation: Version = new Version(foobase).next;
-          expect(record.version.isEqual(mutation.base, mutation.sub)).to.be.true;
           expect(record.value['value']).to.equal('foobaz');
           done();
         });
@@ -171,8 +169,6 @@ describe("Tactical Store", () => {
           return ts.commit(key, foobaz, new Version(foobase));
         })
         .subscribe((record: Record) => {
-          var mutation: Version = new Version(foobase).next;
-          expect(record.version.isEqual(mutation.base, mutation.sub)).to.be.true;
           expect(record.value['value']).to.equal('foobaz');
           done();
         });
@@ -311,8 +307,6 @@ describe("Tactical Store", () => {
           return ts.pending();
         })
         .subscribeOnNext((record: Record) => {
-          var mutversion: Version = new Version(foobase).next;
-          expect(record.version.isEqual(mutversion.base, mutversion.sub)).to.be.true;
           expect(record.value['value']).to.equal('foobaz');
           done();
         });
