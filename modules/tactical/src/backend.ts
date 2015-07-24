@@ -2,6 +2,7 @@
 
 import {Observable, Subject} from 'rx';
 import {serializeValue} from './json';
+import {Version} from './tactical_store';
 
 /**
  * A combination of version, key, and data returned by the backend.
@@ -21,6 +22,11 @@ export interface VersionedObject {
    * Data object itself.
    */
   data: Object;
+
+  /**
+   * If this object is the result of applying
+   */
+  mutationId: Object;
 }
 
 /**
@@ -35,26 +41,58 @@ export interface Backend {
   request(key: Object): void;
 
   /**
+   * Send a mutation to the backend to be applied. If successful, a new object
+   * will be delivered on the data stream with the given opaque mutationId. The
+   * mutation may also fail on the server. If the failure is the result of an
+   * outdated base version, a new object will be delivered on the data stream.
+   * If the server has rejected the mutation for some other reason, a notification
+   * will be delivered to the failed mutation stream.
+   */
+  mutate(key: Object, value: Object, baseVersion: string, mutationId: Object);
+
+  /**
    * A stream of versioned objects coming back from the backend.
    */
   data(): Observable<VersionedObject>;
+
+  /**
+   * Mutations which haven't failed because of a version conflict, but the server
+   * has chosen to reject them for some other reason.
+   */
+  failed(): Observable<FailedMutation>
+}
+
+/**
+ * A mutation failed by the server for a reason other than a version conflict.
+ * Contains the id of the failed mutation, plus information about the failure.
+ */
+export interface FailedMutation {
+  key: Object;
+  baseVersion: string;
+  mutationId: Object;
+  reason: string;
+  debuggingInfo: Object;
 }
 
 /**
  * A fake implementation of the backend, intended for testing.
  */
 export class FakeBackend implements Backend {
-  subject: Subject<VersionedObject>;
+  dataSubject: Subject<VersionedObject>;
+  failedSubject: Subject<FailedMutation>;
   objects: {[key: string]: VersionedObject} = {};
 
-  constructor() { this.subject = new Subject<VersionedObject>(); }
+  constructor() {
+    this.dataSubject = new Subject<VersionedObject>();
+    this.failedSubject = new Subject<FailedMutation>();
+  }
 
   request(key: Object): void {
     var keyStr = serializeValue(key);
     if (!this.objects.hasOwnProperty(keyStr)) {
       return;
     }
-    setTimeout(() => { this.subject.onNext(this.objects[keyStr]); });
+    setTimeout(() => { this.dataSubject.onNext(this.objects[keyStr]); });
   }
 
   /**
@@ -65,12 +103,45 @@ export class FakeBackend implements Backend {
   load(object: VersionedObject, broadcast: boolean = true): void {
     this.objects[serializeValue(object.key)] = object;
     if (broadcast) {
-      this.subject.onNext(object);
+      this.dataSubject.onNext(object);
     }
+  }
+
+  mutate(key: Object, value: Object, baseVersion: string, mutationId: Object): void {
+    var keyStr = serializeValue(key);
+    // Check for version compatibility.
+    if (this.objects.hasOwnProperty(keyStr)) {
+      var old = this.objects[keyStr];
+      if (old.version !== baseVersion) {
+        // Newer version is available. Reject mutation by returning new version.
+        this.dataSubject.onNext(old);
+        return;
+      }
+    }
+    if (mutationId.hasOwnProperty('fail') && mutationId['fail']) {
+      this.failedSubject.onNext({
+        key: key,
+        baseVersion: baseVersion,
+        mutationId: mutationId,
+        reason: 'Fail for test',
+        debuggingInfo: {failure: true}
+      });
+      return;
+    }
+    // Construct a new version of the object.
+    this.objects[keyStr] = <VersionedObject>{
+      key: key,
+      version: baseVersion + '.m',
+      data: value,
+      mutationId: mutationId
+    };
+    this.dataSubject.onNext(this.objects[keyStr]);
   }
 
   /**
    * Stream of versioned objects coming back from the backend.
    */
-  data(): Observable<VersionedObject> { return this.subject; }
+  data(): Observable<VersionedObject> { return this.dataSubject; }
+
+  failed(): Observable<FailedMutation> { return this.failedSubject; }
 }
