@@ -94,7 +94,7 @@ export class InMemoryIdb implements Idb {
     if (!this.db.hasOwnProperty(store)) {
       return Observable.just<Object>(null, Scheduler.currentThread);
     }
-    return Observable.just<Object>(this.db[store][key], Scheduler.currentThread);
+    return Observable.just<Object>(this._clone(this.db[store][key]), Scheduler.currentThread);
   }
 
   /**
@@ -104,7 +104,7 @@ export class InMemoryIdb implements Idb {
     if (!this.db.hasOwnProperty(store)) {
       return Observable.just<boolean>(false, Scheduler.currentThread);
     }
-    this.db[store][key] = value;
+    this.db[store][key] = this._clone(value);
     return Observable.just<boolean>(true, Scheduler.currentThread);
   }
 
@@ -125,6 +125,14 @@ export class InMemoryIdb implements Idb {
   transaction(stores: string[]): Observable<IdbTransaction> {
     return Observable.just<IdbTransaction>(new InMemoryTransaction(this.db),
                                            Scheduler.currentThread);
+  }
+  
+  _clone(value: Object): Object {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    var data = JSON.stringify(value);
+    return JSON.parse(data);
   }
 }
 
