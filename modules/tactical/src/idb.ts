@@ -126,7 +126,7 @@ export class InMemoryIdb implements Idb {
     return Observable.just<IdbTransaction>(new InMemoryTransaction(this.db),
                                            Scheduler.currentThread);
   }
-  
+
   _clone(value: Object): Object {
     if (value === null || value === undefined) {
       return value;

@@ -51,8 +51,9 @@ describe('DataManager', () => {
     var be = new FakeBackend();
     var ts = new TacticalStore(InMemoryIdbFactory);
     var dm = new TacticalDataManager(be, ts);
-    ts.push({key: true}, {foo: 'goodbye'}, 'v1')
-        .flatMap((ok: boolean) => { return dm.request({key: true}); })
+    ts.push({key: true}, 'v1', {foo: 'goodbye'})
+        .defaultIfEmpty()
+        .flatMap(() => dm.request({key: true}))
         .subscribe((data: Object) => {
           expect(data['foo']).to.equal('goodbye');
           done();
@@ -64,8 +65,9 @@ describe('DataManager', () => {
     var dm = new TacticalDataManager(be, ts);
     be.load(_versioned('v1', {key: true}, {foo: 'goodbye'}), false);
     var first = true;
-    ts.push({key: true}, {foo: 'hello'}, 'v1')
-        .flatMap((ok: boolean) => { return dm.request({key: true}); })
+    ts.push({key: true}, 'v1', {foo: 'hello'})
+        .defaultIfEmpty()
+        .flatMap(() => dm.request({key: true}))
         .subscribe((data: Object) => {
           if (first) {
             expect(data['foo']).to.equal('hello');

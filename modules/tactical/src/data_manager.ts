@@ -55,8 +55,8 @@ export class TacticalDataManager implements DataManager {
    */
   private _backendData(data: VersionedObject): void {
     var keyStr = serializeValue(data.key);
-    this._store.push(data.key, data.data, data.version).subscribe();
-    this._pushUpdate(keyStr, new Record(data.data, new Version(data.version)));
+    this._store.push(data.key, data.version, data.data).subscribe();
+    this._pushUpdate(keyStr, new Record(new Version(data.version), data.data));
   }
 
   /**
@@ -71,13 +71,7 @@ export class TacticalDataManager implements DataManager {
   }
 
   commit(key: Object, value: Object, baseVersion: Version): Observable<boolean> {
-    return this._store.commit(key, value, baseVersion)
-        .map((record: Record): boolean => {
-          if (record != null) {
-            this._pushUpdate(serializeValue(key), record);
-          }
-          return (record != null);
-        });
+    return this._store.commit(key, baseVersion, value, {}).defaultIfEmpty().map(() => true);
   }
 
   _open(key: Object, keyStr: string): Observable<Record> {
