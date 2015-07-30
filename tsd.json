@@ -70,6 +70,9 @@
     },
     "rx/rx.backpressure-lite.d.ts": {
       "commit": "b2345aee407127928f247165c91e18bd7dc1a14a"
+    },
+    "socket.io/socket.io.d.ts": {
+      "commit": "dd4d30bbc3bbaa4885cb36a65d80f4e652a1330c"
     }
   }
 }
