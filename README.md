@@ -1,3 +1,5 @@
+# Status: Active Development (2015-08-03)
+
 [![Build Status](https://drone.io/github.com/angular/tactical/status.png)](https://drone.io/github.com/angular/tactical/latest)
 
 # Tactical
