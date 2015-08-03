@@ -18,7 +18,8 @@ module.exports = function(config) {
       'test-main.js',
       {pattern: 'node_modules/chai/chai.js', included: false},
       {pattern: 'node_modules/rx/dist/rx.all.js', included: false},
-      {pattern: 'dist/**/*.js', included: false}
+      {pattern: 'dist/tactical/src/**/*.js', included: false},
+      {pattern: 'dist/tactical/browser_test/**/*.js', included: false}
     ],
 
 

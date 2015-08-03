@@ -55,6 +55,7 @@ export interface BackendService {
 export interface BaseData {
   base: string;  // a unique 'base' version provided by the backend service to identify the 'data'
   data: Object;  // the 'data' to send upstream to the client
+  key?: Object;
 }
 
 /**
