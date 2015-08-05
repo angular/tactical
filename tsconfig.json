@@ -6,6 +6,7 @@
         "removeComments": true,
         "preserveConstEnums": true,
         "sourceMap": true,
-        "outDir": "./dist/"
+        "outDir": "./dist/",
+        "declarationFiles": true
     }
 }
