@@ -418,7 +418,7 @@ export class TacticalStore implements Store {
                                            {value: value, context: {}}))
                     .flatMap(() => {
                       var res = Observable.just<boolean>(true);
-                      if (previousVersion) {
+                      if (previousVersion && !previousVersion.isEqual(pushKey.version)) {
                         if (previousVersion.isInitial || isResolved) {
                           res =
                               this._removeBase(new RecordKey(pushKey.chain, previousVersion), txn);
