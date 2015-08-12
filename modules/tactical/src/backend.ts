@@ -26,7 +26,7 @@ export interface VersionedObject {
   /**
    * If this object is the result of applying
    */
-  mutationId: Object;
+  mutationContext: Object;
 }
 
 /**
@@ -42,13 +42,13 @@ export interface Backend {
 
   /**
    * Send a mutation to the backend to be applied. If successful, a new object
-   * will be delivered on the data stream with the given opaque mutationId. The
+   * will be delivered on the data stream with the given opaque context. The
    * mutation may also fail on the server. If the failure is the result of an
    * outdated base version, a new object will be delivered on the data stream.
    * If the server has rejected the mutation for some other reason, a notification
    * will be delivered to the failed mutation stream.
    */
-  mutate(key: Object, value: Object, baseVersion: string, mutationId: Object);
+  mutate(key: Object, value: Object, baseVersion: string, context: Object);
 
   /**
    * A stream of versioned objects coming back from the backend.
@@ -69,7 +69,7 @@ export interface Backend {
 export interface FailedMutation {
   key: Object;
   baseVersion: string;
-  mutationId: Object;
+  context: Object;
   reason: string;
   debuggingInfo: Object;
 }
@@ -107,7 +107,7 @@ export class FakeBackend implements Backend {
     }
   }
 
-  mutate(key: Object, value: Object, baseVersion: string, mutationId: Object): void {
+  mutate(key: Object, value: Object, baseVersion: string, context: Object): void {
     var keyStr = serializeValue(key);
     // Check for version compatibility.
     if (this.objects.hasOwnProperty(keyStr)) {
@@ -118,11 +118,11 @@ export class FakeBackend implements Backend {
         return;
       }
     }
-    if (mutationId.hasOwnProperty('fail') && mutationId['fail']) {
+    if (context.hasOwnProperty('fail') && context['fail']) {
       this.failedSubject.onNext({
         key: key,
         baseVersion: baseVersion,
-        mutationId: mutationId,
+        context: context,
         reason: 'Fail for test',
         debuggingInfo: {failure: true}
       });
@@ -133,7 +133,7 @@ export class FakeBackend implements Backend {
       key: key,
       version: baseVersion + '.m',
       data: value,
-      mutationId: mutationId
+      mutationContext: context
     };
     this.dataSubject.onNext(this.objects[keyStr]);
   }

@@ -1,4 +1,5 @@
-/// <reference path="../../../typings/tsd.d.ts" />
+/// <reference path="../../../typings/rx/rx.d.ts" />
+/// <reference path="../../../typings/socket.io/socket.io.d.ts" />
 import {Observable, Subject} from 'rx';
 import {Backend, FailedMutation, VersionedObject} from './backend';
 import {Version} from './tactical_store';
@@ -6,14 +7,32 @@ import {Version} from './tactical_store';
 // Backend service interfaces
 //==================================================================================================
 
-/** A callback to handle failing a mutation. */
-export type FailureHandler = (err: any, result: Failure) => void;
 
 /** A callback to handle resolving a mutation. */
-export type ResolutionHandler = (err: any, result: BaseData) => void;
+export type AcceptHandler = (version: string, data: Object) => void;
 
-/** A callback to handle satisfying a request. */
-export type ResponseHandler = (err: any, result: BaseData) => void;
+/** A callback to handle failing a mutation. */
+export type RejectHandler = (rejection: Conflict | Failure) => void;
+
+/** A callback which indicates request processing is over (possibly with an error) */
+export type Callback = (err?: any) => void;
+
+export type PublishHandler = (key: Object, version: string, data: Object) => void;
+
+export class Conflict {
+  version: string;
+  data: Object;
+}
+
+export class Failure {
+  constructor(public reason: string, public info: Object = {}) {}
+}
+
+export interface MutationHandler {
+  accept: AcceptHandler;
+  reject: RejectHandler;
+  publish: PublishHandler;
+}
 
 /**
  * An interface that a backend must implement and provide to Tactical's implementation of
@@ -21,95 +40,72 @@ export type ResponseHandler = (err: any, result: BaseData) => void;
  */
 export interface BackendService {
   /**
-   * Called by SocketServer when a mutation is received from the client. The 'key' was provided by
-   * the application to identify the 'mutation', the 'base' was provided by the backend services
-   * to identify the data associated with the 'key', the 'id' was provided by Tactical to identify
-   * the 'mutation', and the 'mutation' was provided by the application to be applied to the backend
-   * data model.
+   * Called when a request is received from the client. The `key` provided by the application
+   * identifies the request. The backend is free to `publish` multiple responses for many different
+   * keys.
    *
-   * 'resolve' should be called if the 'mutation' can be successfully applied to the data model. A
-   * mutation can only be considered successful if the resulting change to the data model is deeply
-   * equal to the provided 'mutation'. This will notify all connected clients that a new mutation
-   * has been resolved by the backend services.
    *
-   * 'fail' should be called if the 'mutation' cannot be applied or if the resulting change of
-   * applying the 'mutation' does not deeply equal the 'mutation' provided. This will notify
-   * the calling client that their mutation could not be applied.
    */
-  onMutation(key: Object, base: string, id: number, mutation: Object, resolve: ResolutionHandler,
-             fail: FailureHandler): void;
+  onRequest(key: Object, publish: PublishHandler, callback: Callback): void;
 
   /**
-   * Called by SocketServer when a request is received from the client. The 'key' was provided
-   * by the application to identify the request.
+   * Called when a mutation for the given `key` is received from the client. This mutation is based
+   * on
+   * the version `base` and instructs the backend to set `key` to `value`.
    *
-   * 'respond' should be called once the request has been satisfied by the backend services.
-   * This will notify the calling client that their request has been satisfied.
+   * The backend is given a `handler` with a few different methods that can be called. If the
+   * backend decides to accept the mutation, it should call `handler.accept` with the new version
+   * and the mutated value. If the backend cannot accept the mutation, it should call
+   * `handler.reject`,
+   * the argument to which depends on the reason for rejection. Backends can reject for two reasons.
+   * Either the mutation is against an outdated version, or the new object fails some validation
+   * rule.
+   *
+   * If there is a newer version of the object in question, `handler.reject` should be called with a
+   * `Conflict` object, which can be created from the version and value of the conflicting object.
+   * Otherwise, it should be called with a `Failure` which takes an error message and an arbitrary
+   * object that will be passed to the client for debugging purposes.
+   *
+   * `handler.publish` is available if the backend wishes to deliver updates to other keys that
+   * happen
+   * as a result of the mutation.
+   *
+   * `callback` should be called when the mutation has been handled, or earlier with any
+   * error that might occur.
    */
-  onRequest(key: Object, respond: ResponseHandler): void;
-}
-
-/**
- * A callback result type for ResolutionHandler and ResponseHandler.
- */
-export interface BaseData {
-  base: string;  // a unique 'base' version provided by the backend service to identify the 'data'
-  data: Object;  // the 'data' to send upstream to the client
-  key?: Object;
-}
-
-/**
- * A callback result type for FailureHandler.
- */
-export interface Failure {
-  reason: string;    // a short description of why the mutation was failed
-  context?: Object;  // any 'contextual' data surrounding the 'reason' why the mutation was failed
+  onMutation(key: Object, base: string, value: Object, handler: MutationHandler,
+             callback: Callback): void;
 }
 
 // Types emitted on socket streams
 //==================================================================================================
 
 /**
- * The type that is emitted on the 'data' stream.
+ * The type that is emitted on the 'data' stream from server to client.
  */
 export type DataFrame = VersionedObject;
 
 /**
- * The type that is emitted on the 'failure' stream.
+ * The type that is emitted on the 'failure' stream from server to client.
  */
 export type FailureFrame = FailedMutation;
 
 /**
- * The type that is emitted on the 'mutation' stream.
- */
-export interface MutationFrame {
-  key: Object;       // the 'key' that is associated with the 'mutation'
-  base: string;      // the 'base' that the 'mutation' is targeting
-  id: number;        // the unique 'id' of the 'mutation'
-  mutation: Object;  // the 'mutation' that is to be applied
-  context?: Object;  // contextual information needed to authorize the request
-}
-
-/**
- * The type that is emitted on the 'request' stream.
+ * The type that is emitted on the 'request' stream from client to server.
  */
 export interface RequestFrame {
   key: Object;       // the 'key' that is associated with the request
   context?: Object;  // contextual information needed to authorize the request
 }
 
-// Socket interfaces
-//==================================================================================================
-
 /**
- * A bidirectional interface to the client that rests on the server. Uses an implementation of
- * BackendService to supply requests to the backend and stream the results to respective clients.
+ * The type that is emitted on the 'mutation' stream from client to server.
  */
-export interface SocketServer {
-  /**
-   * Broadcasts a data type to each connected client on their respective 'data' stream.
-   */
-  broadcastData(key: Object, base: string, data: Object): void;
+export interface MutationFrame {
+  key: Object;      // the 'key' that is associated with the 'mutation'
+  base: string;     // the 'base' that the 'mutation' is targeting
+  data: Object;     // the 'mutation' that is to be applied
+  context: Object;  // contextual information needed to authorize the request
 }
 
 // Socket IO implementations
@@ -129,19 +125,14 @@ export class SocketIOClient implements Backend {
 
   failed(): Observable<FailureFrame> { return this._failures; }
 
-  mutate(key: Object, mutation: Object, base: string, id: number, cntxt?: Object): void {
-    var mutationFrame: MutationFrame =
-        {key: key, base: base, id: id, mutation: mutation, context: (cntxt) ? cntxt : {}};
-    Observable.just<MutationFrame>(mutationFrame)
-        .map((frame: MutationFrame) => { this.socket.emit('mutation', frame); })
-        .subscribe();
+  mutate(key: Object, mutation: Object, base: string, context: Object): void {
+    var frame: MutationFrame = {key: key, base: base, data: mutation, context: context};
+    this.socket.emit('mutation', frame);
   }
 
   request(key: Object, cntxt?: Object): void {
-    var requestFrame: RequestFrame = {key: key, context: (cntxt) ? cntxt : {}};
-    Observable.just<RequestFrame>(requestFrame)
-        .map((frame: RequestFrame) => { this.socket.emit('request', frame); })
-        .subscribe();
+    var frame: RequestFrame = {key: key, context: (cntxt) ? cntxt : {}};
+    this.socket.emit('request', frame);
   }
 
   /**
@@ -154,50 +145,64 @@ export class SocketIOClient implements Backend {
 }
 
 /**
- * A socket.io implementation of the SocketServer interface.
+ * A server that connects a `SocketIOClient` instance on the client to a `BackendService`
  */
-export class SocketIOServer implements SocketServer {
-  /**
-   * Requires a BackendService to pair with and an implementation of a socket.io server to
-   * connect with.
-   */
-  constructor(public service: BackendService, public io: SocketIO.Server) { this._listen(); }
+export class SocketIOServer {
+  constructor(public service: BackendService, public io: SocketIO.Server) {}
 
+  /**
+   * Send data to all connected clients.
+   */
   broadcastData(key: Object, base: string, data: Object): void {
-    var dataFrame: DataFrame = {key: key, version: base, data: data, mutationId: {id: -1}};
+    var dataFrame: DataFrame = {key: key, version: base, data: data, mutationContext: null};
     this.io.emit('data', dataFrame);
   }
 
   /**
-   * Establishes listeners on the incoming server streams.
+   * Take over an incoming socket connection.
    */
-  private _listen(): void {
-    this.io.on('connection', (socket: SocketIO.Socket) => {
-      socket.on('request', (frame: RequestFrame) => {
-        var respond: ResponseHandler = (err: any, result: BaseData): void => {
-          var dataFrame: DataFrame =
-              {key: frame.key, version: result.base, data: result.data, mutationId: {id: -1}};
-          socket.emit('data', dataFrame);
-        };
-        this.service.onRequest(frame.key, respond);
+  public accept(socket: SocketIO.Socket): void {
+    // Shared function for publishing data.
+    var publish: PublishHandler = (key: Object, version: string, data: Object): void => {
+      var dataFrame: DataFrame = {key: key, version: version, data: data, mutationContext: {}};
+      socket.emit('data', dataFrame);
+    };
+    socket.on('request', (frame: RequestFrame) => {
+      this.service.onRequest(frame.key, publish, (err: any) => {
+        // TODO(alxhub): better error handling.
+        if (err) throw err;
       });
-      socket.on('mutation', (frame: MutationFrame) => {
-        var resolve: ResolutionHandler = (err: any, result: BaseData): void => {
-          var dataFrame: DataFrame =
-              {key: frame.key, version: result.base, data: result.data, mutationId: {id: frame.id}};
-          this.io.emit('data', dataFrame);
-        };
-        var fail: FailureHandler = (err: any, result: Failure): void => {
-          var failureFrame: FailureFrame = {
+    });
+    socket.on('mutation', (frame: MutationFrame) => {
+      var handler: MutationHandler = {
+        accept: (version: string, data: Object) => {
+          socket.emit('data', <DataFrame>{
             key: frame.key,
-            baseVersion: frame.base,
-            mutationId: {id: frame.id},
-            reason: result.reason,
-            debuggingInfo: (result.context) ? result.context : {}
-          };
-          socket.emit('failure', failureFrame);
-        };
-        this.service.onMutation(frame.key, frame.base, frame.id, frame.mutation, resolve, fail);
+            version: version,
+            data: data,
+            mutationContext: frame.context
+          });
+        },
+        reject: (rejection: Conflict | Failure) => {
+          if (rejection instanceof Conflict) {
+            // Rejection due to conflict is just a new data notification without the context.
+            socket.emit(
+                'data',
+                <DataFrame>{key: frame.key, version: rejection.version, data: rejection.data});
+          } else if (rejection instanceof Failure) {
+            // Send a failure notification.
+            socket.emit('failure', <FailureFrame>{
+              key: frame.key,
+              reason: rejection.reason,
+              debuggingInfo: rejection.info
+            });
+          }
+        },
+        publish: publish
+      };
+      this.service.onMutation(frame.key, frame.base, frame.data, handler, (err: any) => {
+        // TODO(alxhub): better error handling.
+        if (err) throw err;
       });
     });
   }

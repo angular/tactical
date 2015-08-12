@@ -32,7 +32,7 @@ describe('FakeBackend', () => {
     be.data().subscribe((obj) => {
       expect(obj.version).to.equal('v1.m');
       expect(obj.data['value']).to.be.true;
-      expect(obj.mutationId).to.deep.equal({id: 1});
+      expect(obj.mutationContext).to.deep.equal({id: 1});
       done();
     });
     be.mutate({key: true}, {value: true}, 'v1', {id: 1});
@@ -43,7 +43,7 @@ describe('FakeBackend', () => {
     be.data().subscribe((obj) => {
       expect(obj.version).to.equal('v2');
       expect(obj.data['value']).to.be.false;
-      expect(obj.mutationId).to.be.undefined;
+      expect(obj.mutationContext).to.be.undefined;
       done();
     });
     be.mutate({key: true}, {value: true}, 'v1', {id: 1});
@@ -54,7 +54,7 @@ describe('FakeBackend', () => {
     be.failed().subscribe((obj) => {
       expect(obj.key).to.deep.equal({key: true});
       expect(obj.baseVersion).to.equal('v1');
-      expect(obj.mutationId).to.deep.equal({id: 1, fail: true});
+      expect(obj.context).to.deep.equal({id: 1, fail: true});
       expect(obj.reason).to.equal('Fail for test');
       done();
     });
