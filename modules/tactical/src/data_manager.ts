@@ -102,8 +102,9 @@ export class TacticalDataManager implements DataManager {
   beginUpdate(key: Object): Observable<Updater> {
     var keyStr = serializeValue(key);
     return this._open(key, keyStr)
-        .map((record: Record):
-             Updater => { return new TacticalUpdater(record.value, key, this, record.version); });
+        .map((record: Record): Updater => {
+          return new TacticalUpdater(record.value, key, this, record.version);
+        });
   }
 }
 
