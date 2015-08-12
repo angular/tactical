@@ -1,6 +1,6 @@
 /// <reference path="../../../typings/rx/rx.all.d.ts" />
 
-import {Observable, ReplaySubject, Scheduler} from 'rx';
+import {Observable, Scheduler} from 'rx';
 
 // Factory functions.
 //==================================================================================================
@@ -27,19 +27,18 @@ export var InMemoryIdbFactory: IdbFactory = (database: string, stores: string[])
  */
 export var IndexedDBFactory: IdbFactory = (database: string, stores: string[]): IndexedDB => {
   // set buffer size to 1 so that the observable will only emit the most recent opened connection
-  var dbConnection: ReplaySubject<IDBDatabase> = new ReplaySubject<IDBDatabase>(1);
-  if (indexedDB) {
-    var DBOpenRequest: IDBOpenDBRequest = indexedDB.open(database);
-    DBOpenRequest.onupgradeneeded = (upgrade: IDBVersionChangeEvent) => {
-      stores.forEach((store: string) => { DBOpenRequest.result.createObjectStore(store); });
-    };
-    DBOpenRequest.onsuccess = (success: Event) => { dbConnection.onNext(DBOpenRequest.result); };
-    DBOpenRequest.onerror = (error: ErrorEvent) => { dbConnection.onError(error.message); };
-  } else {
-    dbConnection.onError('indexedDB is undefined');
-  }
-
-  return new IndexedDB(dbConnection);
+  return new IndexedDB(Observable.create<IDBDatabase>((observer) => {
+    if (indexedDB) {
+      var DBOpenRequest: IDBOpenDBRequest = indexedDB.open(database);
+      DBOpenRequest.onupgradeneeded = (upgrade: IDBVersionChangeEvent) => {
+        stores.forEach((store: string) => { DBOpenRequest.result.createObjectStore(store); });
+      };
+      DBOpenRequest.onsuccess = (success: Event) => { observer.onNext(DBOpenRequest.result); };
+      DBOpenRequest.onerror = (error: ErrorEvent) => { observer.onError(error.message); };
+    } else {
+      observer.onError('indexedDB is undefined');
+    }
+  }));
 };
 
 // Idb interfaces.
@@ -184,7 +183,7 @@ export class InMemoryTransaction implements IdbTransaction {
 export class IndexedDB implements Idb {
   static READ_WRITE: string = 'readwrite';
 
-  constructor(private _dbConnection: ReplaySubject<IDBDatabase>) {}
+  constructor(private _dbConnection: Observable<IDBDatabase>) {}
 
   /**
    * Emits all the keys present in the given store.
