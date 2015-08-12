@@ -37,6 +37,8 @@ export function serializeValue(value: any): string {
     } else {
       return serializeObject(<Object>value);
     }
+  } else if (value === undefined) {
+    return null;
   } else {
     throw 'unsupported type: "' + type + '" for ' + value;
   }
